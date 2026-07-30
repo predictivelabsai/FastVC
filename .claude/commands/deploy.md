@@ -28,6 +28,9 @@ Domain: `vc.fastsme.com`, port `5059`, health path `/healthz`.
 2. `docker-entrypoint.sh` runs `db.migrate` on start
 3. Synthetic seed is manual: `docker compose exec web python -m synthetic.generate --seed 42`
 
+The repository push webhook targets the FastSME Coolify instance at
+`https://coolify.fastsme.com/webhooks/source/github/events/manual`.
+
 ## Pre-push checklist
 
 ```bash

@@ -67,8 +67,8 @@ FastVC deploys from `main` to Coolify using the repository `Dockerfile`. The
 canonical production origin is `https://vc.fastsme.com`, the exposed container
 port is `5059`, and the health path is `/healthz`. Set the variables listed in
 `.env.coolify.sample`; `docker-entrypoint.sh` runs the idempotent schema
-migration before starting the application. An active GitHub push webhook
-automatically deploys updates to `main`.
+migration before starting the application. An authenticated GitHub Actions
+job automatically deploys updates to `main` after CI passes.
 
 ## Safety and data boundaries
 

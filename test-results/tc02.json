@@ -1,0 +1,9 @@
+{
+  "id": "tc02",
+  "prompt": "ltm: what are the financials of DR VET?",
+  "expected_agent": "t12_normalizer",
+  "routed_agent": "t12_normalizer",
+  "route_match": true,
+  "passed": true,
+  "dry_run": true
+}

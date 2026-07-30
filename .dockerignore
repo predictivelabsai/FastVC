@@ -1,0 +1,39 @@
+.git
+.gitignore
+.venv
+.env
+.env.local
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.playwright-mcp
+.playwright-cli
+.claude
+
+# Dev / demo artifacts that aren't needed at runtime
+screenshots
+output
+test-cases
+test-results
+tests
+
+# docs/ is bundled — the landing page serves docs/fastvc.gif and
+# docs/fastvc-product-tour.pdf. Keep them in the image.
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Coolify / deploy artifacts
+*.coolify

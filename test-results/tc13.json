@@ -1,0 +1,9 @@
+{
+  "id": "tc13",
+  "prompt": "triage: Baltic Transline logistics, €397M revenue, Kaunas",
+  "expected_agent": "deal_triage",
+  "routed_agent": "deal_triage",
+  "route_match": true,
+  "passed": true,
+  "dry_run": true
+}

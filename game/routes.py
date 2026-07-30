@@ -1,0 +1,329 @@
+"""FastVC game routes — training RPG at /app/training.
+
+Uses LangGraph ReAct agent with game-state mutation tools.
+The agent reasons about the player's action, calls tools to update state
+(close deals, adjust resources, advance stages), then generates narrative.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from starlette.responses import StreamingResponse, JSONResponse
+
+from chat import sse
+from game.engine import (
+    CHARACTERS, LEVELS, GameState, new_game, draw_event, format_status,
+    STAGES, calculate_score, load_deal_pipeline,
+)
+from game.prompts import (
+    GAME_MASTER_SYSTEM, WELCOME, CHARACTER_SELECT_ROW,
+    GAME_OVER, LEVEL_UP_PROMPT,
+)
+
+log = logging.getLogger(__name__)
+
+CHAR_MAP = {}
+for k, v in CHARACTERS.items():
+    CHAR_MAP[k] = k
+    CHAR_MAP[v["name"].lower()] = k
+    CHAR_MAP[v["title"].lower().lstrip("the ")] = k
+
+CHAR_MAP.update({
+    "1": "dealmaker", "2": "analyst", "3": "investigator",
+    "4": "operator", "5": "fundraiser",
+    "marcus": "dealmaker", "elena": "analyst", "raj": "investigator",
+    "sofia": "operator", "james": "fundraiser",
+    "marcus drake": "dealmaker", "elena voss": "analyst",
+    "raj mehta": "investigator", "sofia chen": "operator",
+    "james whitfield": "fundraiser",
+})
+
+
+def _get_game_state(sess) -> GameState | None:
+    raw = sess.get("pe_hero_state")
+    if raw:
+        try:
+            return GameState.from_dict(json.loads(raw) if isinstance(raw, str) else raw)
+        except Exception:
+            pass
+    return None
+
+
+def _save_game_state(sess, state: GameState):
+    sess["pe_hero_state"] = json.dumps(state.to_dict())
+
+
+def _build_system_prompt(state: GameState) -> str:
+    char = CHARACTERS.get(state.character, {})
+    lvl = LEVELS.get(state.level, {})
+    event = draw_event()
+    state.events_history.append(event["name"])
+
+    char_info = (
+        f"**{char['name']}** — {char['title']} ({char['icon']})\n"
+        f"Role: {char['role']}\n"
+        f"Ability: {char['ability']}\n"
+        f"Background: {char['description']}"
+    )
+
+    return GAME_MASTER_SYSTEM.format(
+        total_rounds=state.total_rounds,
+        status=format_status(state),
+        event=f"**{event['name']}**: {event['effect']}",
+        character_info=char_info,
+        level_title=lvl.get("title", "Associate"),
+        level_complexity=lvl.get("complexity", ""),
+    )
+
+
+def _welcome_text() -> str:
+    text = WELCOME
+    for key, char in CHARACTERS.items():
+        text += CHARACTER_SELECT_ROW.format(
+            icon=char["icon"],
+            name=char["name"],
+            role=char["role"],
+            capital=char["start_capital"],
+            knowledge=char["start_knowledge"],
+            network=char["start_network"],
+            ability_short=char["ability"][:55] + "...",
+        )
+    text += "\n*Type a character name or number (1-5) to begin.*\n"
+    return text
+
+
+def _game_over_text(state: GameState) -> str:
+    char = CHARACTERS.get(state.character, {})
+    score = calculate_score(state)
+    state.score = score
+
+    if score >= 1200:
+        result_tone = "WHAT A PERFORMANCE! You absolutely DOMINATED out there!"
+    elif score >= 800:
+        result_tone = "Solid run! You've got the instincts, now sharpen the execution."
+    elif score >= 400:
+        result_tone = "Not bad for a first run, but I KNOW you can do better. Get back in there!"
+    else:
+        result_tone = "Tough round. But hey, every great investor has a fund they'd rather forget. Learn and come back STRONGER."
+
+    current_lvl = LEVELS[state.level]
+    level_keys = list(LEVELS.keys())
+    current_idx = level_keys.index(state.level)
+
+    if current_idx < len(level_keys) - 1 and score >= LEVELS[level_keys[current_idx + 1]]["unlock"]:
+        next_key = level_keys[current_idx + 1]
+        next_lvl = LEVELS[next_key]
+        next_level_msg = (
+            f"\n**LEVEL UNLOCKED: {next_lvl['title']}** — {next_lvl['description']}\n\n"
+            f"1. **Level up** to {next_lvl['title']} — let's GO!\n"
+            f"2. **Replay** {current_lvl['title']} with a different character\n"
+            f"3. **New game** — start fresh\n"
+        )
+    else:
+        next_level_msg = (
+            f"\nScore {LEVELS[level_keys[min(current_idx + 1, len(level_keys)-1)]]['unlock']:,} to unlock the next level.\n\n"
+            f"1. **Replay** {current_lvl['title']} — come back stronger!\n"
+            f"2. **New character** — try a different role\n"
+            f"3. **New game** — start fresh\n"
+        )
+
+    return GAME_OVER.format(
+        result_tone=result_tone,
+        player_name=state.player_name,
+        character_name=state.character_name,
+        character_title=char.get("title", ""),
+        portfolio_value=state.portfolio_value(),
+        capital=state.capital,
+        deals_closed=state.deals_closed,
+        deals_exited=state.deals_exited,
+        knowledge=state.knowledge,
+        network=state.network,
+        score=score,
+        next_level_msg=next_level_msg,
+    )
+
+
+async def _stream_agent_turn(state: GameState, user_content: str):
+    """Run the LangGraph game agent and yield SSE events.
+
+    Uses the same astream_events pattern as the main chat (chat/routes.py).
+    The agent calls game tools to mutate state, then generates narrative.
+    """
+    from game.agent import build_game_agent
+
+    system = _build_system_prompt(state)
+    graph = build_game_agent(state, system)
+    messages = [HumanMessage(content=user_content)]
+
+    async for event in graph.astream_events({"messages": messages}, version="v2"):
+        kind = event["event"]
+        if kind == "on_chat_model_stream":
+            chunk = event["data"].get("chunk")
+            if chunk and hasattr(chunk, "content") and isinstance(chunk.content, str) and chunk.content:
+                if not getattr(chunk, "tool_call_chunks", None):
+                    yield sse.event(sse.TOKEN, {"text": chunk.content})
+        elif kind == "on_tool_start":
+            name = event.get("name", "unknown")
+            args = event["data"].get("input", {})
+            yield sse.event(sse.TOOL_START, {"name": name, "args": args})
+        elif kind == "on_tool_end":
+            name = event.get("name", "unknown")
+            raw = event["data"].get("output", "")
+            output = getattr(raw, "content", None) or (raw if isinstance(raw, str) else str(raw))
+            yield sse.event(sse.TOOL_END, {"name": name, "output": output[:2000]})
+
+
+def register_game_routes(rt):
+    """Register FastVC training game routes."""
+
+    @rt("/app/training/chat", methods=["POST"])
+    async def training_chat(request):
+        from starlette.requests import Request
+        sess = request.session
+        form = await request.form()
+        user_msg = (form.get("msg") or "").strip()
+
+        if not user_msg:
+            return JSONResponse({"error": "empty message"}, status_code=400)
+
+        state = _get_game_state(sess)
+
+        async def event_stream():
+            nonlocal state
+
+            yield sse.event("session", {"sid": "training"})
+            yield sse.event(sse.AGENT_ROUTE, {
+                "slug": "pe_hero_game",
+                "agent": "Coach V",
+                "icon": "\U0001f3c8",
+            })
+
+            # ── Character selection ──
+            if state is None:
+                choice = user_msg.lower().strip().rstrip(".")
+                char_key = CHAR_MAP.get(choice)
+
+                if choice in ("level up", "next level"):
+                    yield sse.event(sse.TOKEN, {"text": _welcome_text()})
+                    yield sse.event(sse.DONE, {"slug": "pe_hero_game"})
+                    return
+
+                if not char_key:
+                    yield sse.event(sse.TOKEN, {"text": _welcome_text()})
+                    yield sse.event(sse.DONE, {"slug": "pe_hero_game"})
+                    return
+
+                level = sess.get("pe_hero_level", "associate")
+                state = new_game(char_key, level=level, player_name=sess.get("email", "Player"))
+                state.deal_pipeline = load_deal_pipeline(country="LT", limit=40)
+                _save_game_state(sess, state)
+
+                char = CHARACTERS[char_key]
+                lvl = LEVELS[level]
+                intro = (
+                    f"## {char['icon']} You are **{char['name']}** — {char['title']}\n"
+                    f"*{char['description']}*\n\n"
+                    f"**€{char['start_capital']:,}** capital | "
+                    f"**{char['start_knowledge']}** knowledge | "
+                    f"**{char['start_network']}** network\n\n"
+                    f"Special: *{char['ability']}*\n\n"
+                    f"**Level: {lvl['title']}** — {lvl['description']}\n\n"
+                    f"---\n\n"
+                )
+                yield sse.event(sse.TOKEN, {"text": intro})
+
+                try:
+                    async for evt in _stream_agent_turn(
+                        state,
+                        f"The game begins! Present Round 1, Stage 1: Deal Sourcing.\n"
+                        f"Set the scene — the player just joined a Lithuanian VC fund. "
+                        f"Call browse_pipeline to see REAL companies in the deal flow. "
+                        f"Present 3-4 of them as potential targets with their actual "
+                        f"financials (revenue, EBITDA, EV, multiple).\n"
+                        f"Give your coaching intro — fire them up! "
+                        f"Then end with 3 choices.",
+                    ):
+                        yield evt
+                except Exception as e:
+                    log.exception("Game agent failed on intro")
+                    yield sse.event(sse.ERROR, {"message": str(e)})
+
+                _save_game_state(sess, state)
+                yield sse.event(sse.DONE, {"slug": "pe_hero_game"})
+                return
+
+            # ── Handle meta commands ──
+            lower = user_msg.lower().strip()
+            if lower in ("new game", "restart", "reset"):
+                sess.pop("pe_hero_state", None)
+                yield sse.event(sse.TOKEN, {"text": "Game reset! Let's go again.\n\n" + _welcome_text()})
+                yield sse.event(sse.DONE, {"slug": "pe_hero_game"})
+                return
+
+            if lower in ("level up", "next level"):
+                level_keys = list(LEVELS.keys())
+                current_idx = level_keys.index(state.level)
+                if current_idx < len(level_keys) - 1:
+                    next_key = level_keys[current_idx + 1]
+                    if state.score >= LEVELS[next_key]["unlock"]:
+                        sess["pe_hero_level"] = next_key
+                        sess.pop("pe_hero_state", None)
+                        next_lvl = LEVELS[next_key]
+                        yield sse.event(sse.TOKEN, {
+                            "text": (
+                                f"## LEVEL UP!\n\n"
+                                f"Welcome to **{next_lvl['title']}** — {next_lvl['description']}\n\n"
+                                f"*{next_lvl['complexity']}*\n\n"
+                                f"Pick your character for this level:\n\n" + _welcome_text()
+                            ),
+                        })
+                        yield sse.event(sse.DONE, {"slug": "pe_hero_game"})
+                        return
+                yield sse.event(sse.TOKEN, {"text": "You haven't unlocked the next level yet. Keep playing!\n"})
+                yield sse.event(sse.DONE, {"slug": "pe_hero_game"})
+                return
+
+            # ── Game over ──
+            if state.game_over:
+                if lower in ("replay", "new character", "new game"):
+                    sess.pop("pe_hero_state", None)
+                    yield sse.event(sse.TOKEN, {"text": _welcome_text()})
+                else:
+                    yield sse.event(sse.TOKEN, {"text": _game_over_text(state)})
+                yield sse.event(sse.DONE, {"slug": "pe_hero_game"})
+                return
+
+            # ── Normal game turn — LangGraph agent with tools ──
+            try:
+                async for evt in _stream_agent_turn(
+                    state,
+                    f"Player action: {user_msg}\n\n"
+                    f"Process this for {state.current_stage()} "
+                    f"(Round {state.round}/{state.total_rounds}).\n"
+                    f"React to their choice — give coaching feedback "
+                    f"(praise great moves, roast bad ones).\n"
+                    f"Show the outcome with updated resource numbers.\n"
+                    f"Then present 3 new choices for the next action.",
+                ):
+                    yield evt
+            except Exception as e:
+                log.exception("Game agent failed")
+                yield sse.event(sse.ERROR, {"message": str(e)})
+
+            _save_game_state(sess, state)
+
+            if state.game_over:
+                yield sse.event(sse.TOKEN, {"text": "\n\n---\n\n" + _game_over_text(state)})
+
+            yield sse.event(sse.DONE, {"slug": "pe_hero_game"})
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    @rt("/app/training/reset", methods=["POST"])
+    async def training_reset(request):
+        request.session.pop("pe_hero_state", None)
+        request.session.pop("pe_hero_level", None)
+        return JSONResponse({"ok": True})

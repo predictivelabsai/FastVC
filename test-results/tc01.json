@@ -1,0 +1,9 @@
+{
+  "id": "tc01",
+  "prompt": "triage: DR VET veterinary clinic, €3.8M revenue, 76 employees, Vilnius",
+  "expected_agent": "deal_triage",
+  "routed_agent": "deal_triage",
+  "route_match": true,
+  "passed": true,
+  "dry_run": true
+}

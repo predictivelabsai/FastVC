@@ -1,0 +1,61 @@
+python-fasthtml>=0.12.0
+uvicorn[standard]>=0.30.0
+python-dotenv>=1.0.0
+pydantic>=2.8.0
+pydantic-settings>=2.4.0
+
+# LLM + agents
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-core>=0.3.0
+langgraph>=0.2.0
+openai>=1.40.0
+anthropic>=0.40.0
+tiktoken>=0.7.0
+
+# Database
+psycopg[binary,pool]>=3.2.0
+sqlalchemy>=2.0.30
+pgvector>=0.3.0
+
+# Local embeddings (no API key required — ONNX runtime, ~100 MB model)
+fastembed>=0.4.0
+
+# Auth
+bcrypt>=4.3.0
+cryptography>=43.0.0
+
+# Data generation / utils
+faker>=26.0.0
+numpy>=2.0.0
+pandas>=2.2.0
+python-dateutil>=2.9.0
+pyyaml>=6.0.2
+
+# Analytics page — plotly charts (text-to-SQL uses pandas + existing llm)
+plotly>=6.0.0
+
+# RSS news feeds
+feedparser>=6.0.0
+
+# Export (XLS tables, Word memos)
+openpyxl>=3.1.0
+python-docx>=1.1.0
+
+# Document extraction (RAG indexing)
+pymupdf>=1.25.0
+
+# Web search tools (Tavily default, EXA fallback)
+tavily-python>=0.7.0
+exa-py>=2.0.0
+
+# Dev / testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0
+
+# Demo artifact generation (screenshots → gif + pdf + pptx)
+pillow>=10.0.0
+reportlab>=4.0.0
+python-pptx>=1.0.0
+playwright>=1.45.0

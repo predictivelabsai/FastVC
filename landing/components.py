@@ -24,8 +24,17 @@ NAV_ITEMS = [
     ("nav_agents", "/agents"),
     ("nav_how", "/how-it-works"),
     ("nav_pricing", "/pricing"),
+    ("nav_partners", "/#partners"),
     ("nav_contact", "/contact"),
 ]
+
+PARTNERS = (
+    ("SAASPASS", "https://saaspass.com/", "https://saaspass.com/_next/static/assets/0176aeff921f6359fee88e796be31ace.png", "Full-stack identity and access management spanning MFA, SSO, passwordless access and integration APIs."),
+    ("Sixty Four", "https://sixtyfour.ee/", "https://sixtyfour.ee/favicon.ico", "A senior Tallinn technology studio delivering software, AI consultancy, service design and public-sector programmes."),
+    ("EDI Labs", "https://edilabs.tech/", "https://edilabs.tech/static/favicon.svg", "AI and data engineering for document intelligence, forecasting, geospatial systems and agentic workflows."),
+    ("Predictive Labs", "https://predictivelabs.ai/", "https://predictivelabs.ai/static/favicon.svg", "Auditable AI systems for health, defence, public management, mobility and financial services."),
+    ("Consistente", "https://consistente.tech/", "https://consistente.tech/static/favicon.svg", "Enterprise AI delivery across financial services, healthcare, the public sector and technology."),
+)
 
 # Light neutral background with cobalt and deep-violet accents.
 TAILWIND_CONFIG = """
@@ -220,9 +229,33 @@ def page(title: str, *content, current_path: str = "/", head_extra=None, lang: s
 
 # ─── Higher-level blocks ───────────────────────────────────────────────
 
-def Section_(*content, bleed: bool = False, cls: str = ""):
+def Section_(*content, bleed: bool = False, cls: str = "", section_id: str | None = None):
     inner_cls = "max-w-7xl mx-auto px-5 md:px-6" if not bleed else "w-full"
-    return Section(Div(*content, cls=inner_cls), cls=f"py-14 md:py-20 lg:py-24 {cls}".strip())
+    return Section(Div(*content, cls=inner_cls), cls=f"py-14 md:py-20 lg:py-24 {cls}".strip(), id=section_id)
+
+
+def PartnersSection():
+    return Section_(
+        Div(
+            Eyebrow("Partners"),
+            Heading(2, "Connect with trusted integration specialists.", cls="mt-3 max-w-4xl"),
+            Body_("Identity, software delivery, data engineering and applied-AI expertise for FastSME implementations.", cls="mt-4 max-w-3xl"),
+            cls="mb-10",
+        ),
+        Div(*[
+            A(
+                Div(Img(src=logo_url, alt=f"{name} logo", loading="lazy", cls="h-12 w-12 object-contain"), Span("Integration Partner", cls="font-mono text-[9px] tracking-widest uppercase text-accent text-right"), cls="flex items-center justify-between gap-3"),
+                H3(name, cls="mt-5 text-lg font-medium text-ink"),
+                P(description, cls="mt-2 text-sm leading-relaxed text-ink-muted"),
+                Span("Visit website ↗", cls="mt-4 block text-xs font-medium text-accent"),
+                href=url, target="_blank", rel="noopener noreferrer",
+                cls="min-w-0 rounded-2xl border border-line bg-bg-elevated p-5 text-ink no-underline transition hover:-translate-y-1 hover:border-accent",
+            )
+            for name, url, logo_url, description in PARTNERS
+        ], cls="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"),
+        cls="border-t border-line scroll-mt-20",
+        section_id="partners",
+    )
 
 
 def Hero(lang: str = "en"):

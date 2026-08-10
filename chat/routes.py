@@ -291,18 +291,12 @@ def _htmx_redirect(request: Request, fallback: str = "/app") -> Response:
 
 @rt("/app/auth/signin", methods=["POST"])
 async def signin(request: Request):
-    """Legacy email-only signin — kept for backward compatibility."""
-    form = await request.form()
-    email = (form.get("email") or "").strip().lower()
-    if "@" not in email:
-        if request.headers.get("HX-Request"):
-            return Response("Invalid email", status_code=400)
-        return JSONResponse({"ok": False, "error": "invalid email"}, status_code=400)
-    set_user_email(request.session, email)
-    _ensure_user(request.session)
-    if request.headers.get("HX-Request"):
-        return _htmx_redirect(request)
-    return JSONResponse({"ok": True, "email": email})
+    """Reject the retired email-only flow; use password or Google OAuth."""
+    clear_user(request.session)
+    return JSONResponse(
+        {"ok": False, "error": "legacy sign-in disabled; use /auth/login or Google OAuth"},
+        status_code=410,
+    )
 
 
 @rt("/app/auth/signout", methods=["POST"])

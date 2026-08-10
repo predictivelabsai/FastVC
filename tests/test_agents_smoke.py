@@ -2,7 +2,7 @@
 
 These do NOT hit the LLM — they verify that every agent module builds, that
 the router dispatches sensibly, and that key tools return real data against
-the synthetic corpus.
+the registry-backed company corpus.
 
 Run with:  pytest -q tests
 """
@@ -16,6 +16,20 @@ import pytest
 from agents.base import cached_agent
 from agents.registry import AGENTS, AGENTS_BY_SLUG
 from agents import router as agent_router
+
+
+def _real_company_slug() -> str:
+    from db import fetch_one
+
+    row = fetch_one(
+        """SELECT c.slug FROM fastvc.companies c
+           WHERE EXISTS (
+               SELECT 1 FROM fastvc.company_financial_periods f WHERE f.company_id=c.id
+           )
+           ORDER BY c.source_quality DESC NULLS LAST,c.slug LIMIT 1"""
+    )
+    assert row, "Load the registry-backed company cohort before running smoke tests"
+    return row["slug"]
 
 
 def test_health_endpoint():
@@ -63,32 +77,34 @@ def test_startup_search_returns_data():
     assert out["startups"][0]["sector"] == "healthtech"
 
 
-def test_rag_retrieval_returns_citations():
-    from rag.retriever import retrieve
-    chunks = retrieve("change of control customer msa", k=3, doc_types=["msa"])
-    assert len(chunks) >= 1
-    assert all(c.doc_type == "msa" for c in chunks)
+def test_rag_contains_no_legacy_synthetic_documents():
+    from db import fetch_one
+
+    row = fetch_one("SELECT count(*) AS count FROM fastvc_rag.documents")
+    assert row["count"] == 0
 
 
 def test_startup_dossier_has_venture_context():
     from tools.venture import get_startup
-    payload = json.loads(get_startup.invoke({"slug_or_id": "northwind-ai"}))
-    assert payload["company"]["startup_stage"] == "series_a"
-    assert payload["founders"]
-    assert payload["funding_rounds"]
+    payload = json.loads(get_startup.invoke({"slug_or_id": _real_company_slug()}))
+    assert payload["company"]["data_source"].startswith("registry_")
+    assert payload["identifiers"]
+    assert payload["annual_financials"]
+    assert payload["source_records"]
 
 
 def test_round_and_outcome_models():
     from tools.venture import build_round_model, model_venture_outcome
+    slug = _real_company_slug()
     round_payload = json.loads(build_round_model.invoke({
-        "slug_or_id": "northwind-ai", "round_type": "series_a",
+        "slug_or_id": slug, "round_type": "series_a",
         "pre_money": 32_000_000, "raise_amount": 8_000_000,
         "our_check": 5_000_000, "persist": False,
     }))
     assert round_payload["post_money"] == 40_000_000
     assert round_payload["fastvc_post_round_pct"] == 12.5
     outcome = json.loads(model_venture_outcome.invoke({
-        "slug_or_id": "northwind-ai", "invested_capital": 5_000_000,
+        "slug_or_id": slug, "invested_capital": 5_000_000,
         "current_ownership_pct": 12.5, "future_dilution_pct": 35,
         "downside_exit": 50_000_000, "base_exit": 500_000_000,
         "upside_exit": 1_500_000_000, "persist": False,
@@ -97,10 +113,22 @@ def test_round_and_outcome_models():
 
 
 def test_integration_secrets_round_trip_without_plaintext():
-    from tools.integrations import decrypt_secret, encrypt_secret, mask_secret, test_stub
+    from tools.integrations import (
+        _credential_view, decrypt_secret, encrypt_secret, mask_identity, mask_secret, test_stub,
+    )
     value = "vc-provider-test-key"
     encrypted = encrypt_secret(value)
     assert value not in encrypted
     assert decrypt_secret(encrypted) == value
     assert mask_secret(value).endswith("-key")
+    assert mask_identity("account@example.com").endswith("@example.com")
+    credential = _credential_view({
+        "provider": "test",
+        "secret_payload": encrypt_secret(json.dumps({
+            "email": "account@example.com", "password": value, "api_key": value,
+        })),
+    })
+    assert value not in json.dumps(credential)
+    assert credential["has_password"] is True
+    assert credential["secret_payload"] == ""
     assert test_stub("affinity", value)["ok"] is True

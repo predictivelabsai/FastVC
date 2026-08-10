@@ -303,7 +303,7 @@ def Hero(lang: str = "en"):
 
 
 def ProductTour(lang: str = "en"):
-    """Code-native product preview that stays in sync with the live product."""
+    """Validated animated walkthrough plus a code-native product summary."""
     return Section(
         Div(
             Div(
@@ -312,6 +312,19 @@ def ProductTour(lang: str = "en"):
                 P(t("tour_body", lang),
                   cls="mt-2 text-ink-muted text-base max-w-2xl leading-relaxed mb-6"),
                 cls="mb-6",
+            ),
+            Div(
+                Img(
+                    src="/static/product-demo.gif",
+                    alt=("FastVC product walkthrough showing specialist AI agents, "
+                         "startup discovery, pipeline, analytics and portfolio workspaces"),
+                    width="1100", height="688", loading="lazy",
+                    cls="block w-full h-auto rounded-xl bg-bg-raised",
+                ),
+                P("A validated tour of the live workspace — failed screens are excluded during capture.",
+                  cls="mt-3 text-center text-xs text-ink-dim"),
+                cls=("mb-8 rounded-2xl border border-line bg-bg-elevated p-2 md:p-3 "
+                     "shadow-[0_20px_60px_rgba(20,27,52,0.10)]"),
             ),
             Div(
                 Div(

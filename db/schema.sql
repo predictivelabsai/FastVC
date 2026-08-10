@@ -91,6 +91,87 @@ CREATE INDEX IF NOT EXISTS companies_startup_stage_idx ON fastvc.companies(start
 CREATE INDEX IF NOT EXISTS companies_momentum_idx ON fastvc.companies(momentum_score DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS companies_fundraising_idx ON fastvc.companies(fundraising_status);
 
+-- Source identity and provenance for registry/API ingestions.  A company may
+-- have several identifiers (registry number, VAT, SIREN, Companies House ID)
+-- and several independently refreshed source records.
+CREATE TABLE IF NOT EXISTS fastvc.ingestion_runs (
+    id               BIGSERIAL PRIMARY KEY,
+    provider         TEXT NOT NULL,
+    mode             TEXT NOT NULL DEFAULT 'ingest',
+    status           TEXT NOT NULL DEFAULT 'running',
+    requested_limit  INTEGER,
+    processed        INTEGER NOT NULL DEFAULT 0,
+    inserted         INTEGER NOT NULL DEFAULT 0,
+    updated          INTEGER NOT NULL DEFAULT 0,
+    skipped          INTEGER NOT NULL DEFAULT 0,
+    errors           INTEGER NOT NULL DEFAULT 0,
+    credits_used     NUMERIC(12,2) NOT NULL DEFAULT 0,
+    cursor           TEXT,
+    error_detail     TEXT,
+    metadata         JSONB NOT NULL DEFAULT '{}',
+    started_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    finished_at      TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS ingestion_runs_provider_idx
+    ON fastvc.ingestion_runs(provider, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS fastvc.company_identifiers (
+    id               BIGSERIAL PRIMARY KEY,
+    company_id       BIGINT NOT NULL REFERENCES fastvc.companies(id) ON DELETE CASCADE,
+    source           TEXT NOT NULL,
+    country_code     TEXT NOT NULL,
+    identifier_type  TEXT NOT NULL,
+    identifier_value TEXT NOT NULL,
+    is_primary       BOOLEAN NOT NULL DEFAULT FALSE,
+    source_url       TEXT,
+    first_seen_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(source, country_code, identifier_type, identifier_value)
+);
+CREATE INDEX IF NOT EXISTS company_identifiers_company_idx
+    ON fastvc.company_identifiers(company_id);
+CREATE INDEX IF NOT EXISTS company_identifiers_lookup_idx
+    ON fastvc.company_identifiers(country_code, identifier_type, identifier_value);
+
+CREATE TABLE IF NOT EXISTS fastvc.company_source_records (
+    id               BIGSERIAL PRIMARY KEY,
+    company_id       BIGINT REFERENCES fastvc.companies(id) ON DELETE CASCADE,
+    source           TEXT NOT NULL,
+    external_id      TEXT NOT NULL,
+    source_url       TEXT,
+    payload          JSONB NOT NULL DEFAULT '{}',
+    payload_hash     TEXT NOT NULL,
+    license          TEXT,
+    fetched_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(source, external_id, payload_hash)
+);
+CREATE INDEX IF NOT EXISTS company_source_records_company_idx
+    ON fastvc.company_source_records(company_id, fetched_at DESC);
+
+CREATE TABLE IF NOT EXISTS fastvc.company_financial_periods (
+    id               BIGSERIAL PRIMARY KEY,
+    company_id       BIGINT NOT NULL REFERENCES fastvc.companies(id) ON DELETE CASCADE,
+    period_end       DATE NOT NULL,
+    period_type      TEXT NOT NULL DEFAULT 'annual',
+    currency         TEXT NOT NULL DEFAULT 'EUR',
+    revenue          NUMERIC(18,2),
+    gross_profit     NUMERIC(18,2),
+    profit_before_tax NUMERIC(18,2),
+    net_profit       NUMERIC(18,2),
+    total_assets     NUMERIC(18,2),
+    current_assets   NUMERIC(18,2),
+    non_current_assets NUMERIC(18,2),
+    liabilities      NUMERIC(18,2),
+    equity           NUMERIC(18,2),
+    employees        INTEGER,
+    source           TEXT NOT NULL,
+    source_external_id TEXT,
+    fetched_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(company_id, period_end, period_type, source)
+);
+CREATE INDEX IF NOT EXISTS company_financial_periods_company_idx
+    ON fastvc.company_financial_periods(company_id, period_end DESC);
+
 -- ── funds (GP side: what's deploying) ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS fastvc.funds (
     id             BIGSERIAL PRIMARY KEY,
@@ -515,6 +596,26 @@ CREATE TABLE IF NOT EXISTS fastvc.user_integrations (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(user_id, provider)
 );
+
+-- Encrypted source-portal credentials.  The complete login/API payload is a
+-- single Fernet ciphertext so usernames, passwords and keys are never stored
+-- in queryable plaintext columns or rendered back to the browser.
+CREATE TABLE IF NOT EXISTS fastvc.user_credentials (
+    id              BIGSERIAL PRIMARY KEY,
+    user_id         BIGINT      NOT NULL REFERENCES fastvc.users(id) ON DELETE CASCADE,
+    provider        TEXT        NOT NULL,
+    label           TEXT        NOT NULL,
+    login_url       TEXT,
+    secret_payload  TEXT        NOT NULL,
+    metadata        JSONB       NOT NULL DEFAULT '{}',
+    status          TEXT        NOT NULL DEFAULT 'configured',
+    last_verified   TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(user_id, provider)
+);
+CREATE INDEX IF NOT EXISTS user_credentials_user_idx
+    ON fastvc.user_credentials(user_id);
 
 -- ── Persons (investor prospecting — owners, directors, HNW) ─────────
 CREATE TABLE IF NOT EXISTS fastvc.persons (

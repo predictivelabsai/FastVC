@@ -217,6 +217,11 @@ def _config_section(current_currency: str = "USD", lang: str = "en"):
         ("", "CRM", "Attio", bool(s.attio_api_key), "BYOK"),
         ("", "CRM", "Pipedrive", bool(s.pipedrive_api_token), s.pipedrive_domain or "BYOK"),
         ("", "Email", "Brevo", bool(s.brevo_api_key), "BYOK"),
+        ("", "Data", "Pappers", bool(s.pappers_api_key), "France"),
+        ("", "Data", "Scoris", bool(s.scoris_api_key), "Europe"),
+        ("", "Data", "Companies House", bool(s.companies_house_api_key), "UK"),
+        ("", "Data", "SIRENE", bool(s.sirene_api_key), "France open data"),
+        ("", "Data", "PRH", True, "Finland open data"),
         ("", "Research", "Tavily", bool(s.tavily_api_key), "web search"),
         ("", "Research", "EXA", bool(s.exa_api_key), "fallback"),
     ]
@@ -233,7 +238,8 @@ def _config_section(current_currency: str = "USD", lang: str = "en"):
             Span("connected" if connected else "off",
                  cls=f"integration-status{' ok' if connected else ''}"),
         ]
-        if name in {"Affinity", "Attio", "Pipedrive", "Brevo"}:
+        if name in {"Affinity", "Attio", "Pipedrive", "Brevo", "Pappers", "Scoris",
+                    "Companies House", "SIRENE", "PRH"}:
             integration_rows.append(A(
                 *row_content,
                 href="/app/integrations",
@@ -263,6 +269,8 @@ def _config_section(current_currency: str = "USD", lang: str = "en"):
             Div(*integration_rows, cls="integration-list"),
             cls="config-integrations",
         ),
+        A("Credentials", href="/app/integrations#credentials",
+          cls="integration-row integration-link"),
         cls="config-section",
     )
 
@@ -298,6 +306,12 @@ def _bottom_nav(current_path: str = "", lang: str = "en"):
         ("Attio",     "/app/integrations#attio",     "◫"),
         ("Pipedrive", "/app/integrations#pipedrive", "⇄"),
         ("Brevo",     "/app/integrations#brevo",     "✉"),
+        ("Pappers",    "/app/integrations#pappers",    "FR"),
+        ("Scoris",     "/app/integrations#scoris",     "EU"),
+        ("Companies House", "/app/integrations#companies_house", "UK"),
+        ("SIRENE",     "/app/integrations#sirene",     "FR"),
+        ("PRH",        "/app/integrations#prh",        "FI"),
+        ("Public Directories", "/app/integrations#public_directories", "◎"),
     ]
     sub_links = [A(
         Span(ic, cls="bottom-nav-icon"),

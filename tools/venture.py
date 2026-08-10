@@ -38,7 +38,8 @@ def _search_startups(**kw) -> str:
                   business_model,employees,arr,growth_rate,gross_margin,net_burn,
                   runway_months,burn_multiple,net_retention,total_funding,
                   last_round_type,last_round_amount,post_money_valuation,
-                  fundraising_status,momentum_score,thesis_score,deal_stage
+                  fundraising_status,momentum_score,thesis_score,source_quality,
+                  data_source,deal_stage
            FROM fastvc.companies WHERE TRUE"""
     ]
     params: list = []
@@ -53,7 +54,10 @@ def _search_startups(**kw) -> str:
         params.append(args.stage.lower())
     if args.sector:
         sql.append("AND sector=%s")
-        params.append(args.sector.lower())
+        params.append({
+            "enterprise_ai": "software", "devtools": "software", "deeptech": "software",
+            "fintech": "fintech", "healthtech": "healthtech",
+        }.get(args.sector.lower(), args.sector.lower()))
     if args.country:
         sql.append("AND country ILIKE %s")
         params.append(args.country)
@@ -67,7 +71,8 @@ def _search_startups(**kw) -> str:
         sql.append("AND thesis_score >= %s")
         params.append(args.min_thesis_score)
     sql.append(
-        "ORDER BY thesis_score DESC NULLS LAST, momentum_score DESC NULLS LAST LIMIT %s"
+        "ORDER BY COALESCE(thesis_score,source_quality) DESC NULLS LAST, "
+        "COALESCE(momentum_score,source_quality) DESC NULLS LAST LIMIT %s"
     )
     params.append(args.limit)
     rows = fetch_all(" ".join(sql), tuple(params))
@@ -123,8 +128,35 @@ def _get_startup(slug_or_id: str) -> str:
            ORDER BY signal_date DESC,strength DESC LIMIT 20""",
         (company_id,),
     )
+    identifiers = fetch_all(
+        """SELECT identifier_type,identifier_value,country_code,source,is_primary
+           FROM fastvc.company_identifiers WHERE company_id=%s
+           ORDER BY is_primary DESC,source,identifier_type""",
+        (company_id,),
+    )
+    annual_financials = fetch_all(
+        """SELECT period_end,currency,revenue,gross_profit,profit_before_tax,net_profit,
+                  total_assets,liabilities,equity,employees,source
+           FROM fastvc.company_financial_periods WHERE company_id=%s
+           ORDER BY period_end DESC LIMIT 8""",
+        (company_id,),
+    )
+    source_records = fetch_all(
+        """SELECT source,external_id,fetched_at,license
+           FROM fastvc.company_source_records WHERE company_id=%s
+           ORDER BY fetched_at DESC""",
+        (company_id,),
+    )
     return _json(
-        {"company": company, "founders": founders, "funding_rounds": rounds, "signals": signals}
+        {
+            "company": company,
+            "identifiers": identifiers,
+            "annual_financials": annual_financials,
+            "source_records": source_records,
+            "founders": founders,
+            "funding_rounds": rounds,
+            "signals": signals,
+        }
     )
 
 
@@ -132,8 +164,8 @@ get_startup = StructuredTool.from_function(
     func=_get_startup,
     name="get_startup",
     description=(
-        "Fetch a startup dossier including operating metrics, founders, financing "
-        "history and recent company signals."
+        "Fetch a company dossier including source identifiers, annual filings, "
+        "provenance, founders, financing history and recent signals."
     ),
     args_schema=GetStartupArgs,
 )
@@ -194,6 +226,13 @@ def _summarize_startup_metrics(slug_or_id: str) -> str:
            ORDER BY month DESC LIMIT 18""",
         (company_id,),
     )
+    annual_history = fetch_all(
+        """SELECT period_end,currency,revenue,gross_profit,profit_before_tax,net_profit,
+                  total_assets,liabilities,equity,employees,source
+           FROM fastvc.company_financial_periods WHERE company_id=%s
+           ORDER BY period_end DESC LIMIT 8""",
+        (company_id,),
+    )
     warnings = []
     if company:
         if company["runway_months"] is not None and float(company["runway_months"]) < 12:
@@ -207,8 +246,10 @@ def _summarize_startup_metrics(slug_or_id: str) -> str:
             "company_id": company_id,
             "metrics": company,
             "monthly_history": history,
+            "annual_filing_history": annual_history,
             "data_quality": {
                 "months_available": len(history),
+                "annual_periods_available": len(annual_history),
                 "warnings": warnings,
                 "note": "Verify period definitions, currency and cohort methodology before IC.",
             },

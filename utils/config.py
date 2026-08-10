@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     affinity_api_key: str = Field(default="", alias="AFFINITY_API_KEY")
     attio_api_key: str = Field(default="", alias="ATTIO_API_KEY")
     brevo_api_key: str = Field(default="", alias="BREVO_API_KEY")
+    pappers_api_key: str = Field(default="", alias="PAPPERS_API_KEY")
+    scoris_api_key: str = Field(default="", alias="SCORIS_API_KEY")
+    companies_house_api_key: str = Field(default="", alias="CH_API_KEY")
+    sirene_api_key: str = Field(default="", alias="SIRENE_API_KEY")
+    fastvc_admin_emails: str = Field(
+        default="kaljuvee@gmail.com,julian@predictivelabs.co.uk",
+        alias="FASTVC_ADMIN_EMAILS",
+    )
 
     # Postmark email
     postmark_api_token: str = Field(default="", alias="POSTMARK_API_TOKEN")

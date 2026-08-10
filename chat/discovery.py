@@ -76,14 +76,17 @@ def discovery(sess, q: str = "", stage: str = "", min_momentum: int = 0):
         where.append("startup_stage=%s")
         params.append(stage)
     if min_momentum:
-        where.append("momentum_score >= %s")
+        where.append("COALESCE(momentum_score,source_quality,0) >= %s")
         params.append(min_momentum)
     rows = fetch_all(
         """SELECT slug,name,sector,sub_sector,startup_stage,arr,growth_rate,
-                  runway_months,burn_multiple,total_funding,momentum_score,thesis_score,
+                  runway_months,burn_multiple,total_funding,
+                  COALESCE(momentum_score,source_quality) AS momentum_score,
+                  COALESCE(thesis_score,source_quality) AS thesis_score,
                   fundraising_status
            FROM fastvc.companies WHERE """ + " AND ".join(where) +
-        " ORDER BY thesis_score DESC NULLS LAST, momentum_score DESC NULLS LAST LIMIT 200",
+        " ORDER BY COALESCE(thesis_score,source_quality) DESC NULLS LAST, "
+        "COALESCE(momentum_score,source_quality) DESC NULLS LAST LIMIT 200",
         tuple(params),
     )
     searches = fetch_all(

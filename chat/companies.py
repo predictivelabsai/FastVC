@@ -82,8 +82,8 @@ def companies_home(sess, q: str = "", sector: str = ""):
 
     # Build query
     sql_parts = ["SELECT slug, name, hq_city, country, sector, sub_sector, employees,",
-                 "startup_stage, arr, growth_rate, runway_months, burn_multiple,",
-                 "momentum_score, deal_stage, founded_year",
+                 "startup_stage, arr, revenue_ltm, growth_rate, runway_months, burn_multiple,",
+                 "momentum_score, source_quality, data_source, deal_stage, founded_year",
                  "FROM fastvc.companies WHERE TRUE"]
     params: list = []
 
@@ -94,7 +94,7 @@ def companies_home(sess, q: str = "", sector: str = ""):
         sql_parts.append("AND sector = %s")
         params.append(sector)
 
-    sql_parts.append("ORDER BY momentum_score DESC NULLS LAST, thesis_score DESC NULLS LAST LIMIT 200")
+    sql_parts.append("ORDER BY COALESCE(momentum_score,source_quality) DESC NULLS LAST, name LIMIT 200")
     rows = fetch_all(" ".join(sql_parts), tuple(params))
 
     # Get distinct sectors for the filter dropdown
@@ -130,22 +130,22 @@ def companies_home(sess, q: str = "", sector: str = ""):
                 Th(t("search_col_name", lang)),
                 Th(t("search_col_city", lang)),
                 Th(t("search_col_sector", lang)),
-                Th("Company stage"), Th("ARR", cls="text-right"),
-                Th("Growth", cls="text-right"), Th("Runway", cls="text-right"),
-                Th("Momentum", cls="text-right"), Th("Pipeline"),
+                Th("Founded"), Th("Latest revenue", cls="text-right"),
+                Th("Growth", cls="text-right"), Th("Employees", cls="text-right"),
+                Th("Source quality", cls="text-right"), Th("Pipeline"),
             )),
             Tbody(
                 *[Tr(
                     Td(A(r["name"], href=f"/app/pipeline/{r['slug']}", cls="company-link")),
                     Td(r["hq_city"] or "—"),
                     Td(Span((r["sector"] or "").replace("_", " ").title(), cls="sector-chip")),
-                    Td((r["startup_stage"] or "—").replace("_", " ").title()),
-                    Td(_fmt_revenue(r["arr"], sym), cls="text-right mono"),
+                    Td(str(r["founded_year"] or "—")),
+                    Td(_fmt_revenue(r["arr"] or r["revenue_ltm"], sym), cls="text-right mono"),
                     Td(f"{float(r['growth_rate']):.0f}%" if r["growth_rate"] is not None else "—",
                        cls="text-right mono"),
-                    Td(f"{float(r['runway_months']):.0f} mo" if r["runway_months"] is not None else "—",
-                       cls="text-right mono"),
-                    Td(f"{float(r['momentum_score']):.0f}" if r["momentum_score"] is not None else "—",
+                    Td(_fmt_int(r["employees"]), cls="text-right mono"),
+                    Td(f"{float(r['momentum_score'] or r['source_quality']):.0f}"
+                       if (r["momentum_score"] is not None or r["source_quality"] is not None) else "—",
                        cls="text-right mono"),
                     Td(_stage_badge(r["deal_stage"])),
                     cls="search-row",

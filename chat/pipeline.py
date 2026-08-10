@@ -345,6 +345,14 @@ def deal_detail(sess, slug: str):
     )
     ltm_rev = sum(float(r["revenue"] or 0) for r in ltm)
     ltm_eb = sum(float(r["adj_ebitda"] or r["ebitda"] or 0) for r in ltm)
+    if not ltm:
+        latest_filing = fetch_one(
+            """SELECT revenue,net_profit FROM fastvc.company_financial_periods
+               WHERE company_id=%s ORDER BY period_end DESC LIMIT 1""",
+            (cid,),
+        )
+        if latest_filing:
+            ltm_rev = float(latest_filing["revenue"] or 0)
 
     top_contracts = fetch_all(
         "SELECT counterparty, annual_value, end_date "
@@ -399,16 +407,15 @@ def deal_detail(sess, slug: str):
         <div><strong>Founded</strong> {co.get('founded_year') or '—'}</div>
         <div><strong>Ownership</strong> {(co.get('ownership') or '').replace('_', ' ')}</div>
       </div>
-      <h4>Startup metrics</h4>
+      <h4>Company metrics</h4>
       <div class="deal-kv">
         <div><strong>Stage</strong> {(co.get('startup_stage') or '—').replace('_', ' ').title()}</div>
-        <div><strong>ARR</strong> {sym}{float(co.get('arr') or 0)/1_000_000:.1f}M</div>
-        <div><strong>Growth</strong> {float(co.get('growth_rate') or 0):.0f}%</div>
-        <div><strong>Gross margin</strong> {float(co.get('gross_margin') or 0):.0f}%</div>
-        <div><strong>Runway</strong> {float(co.get('runway_months') or 0):.0f} months</div>
-        <div><strong>Burn multiple</strong> {float(co.get('burn_multiple') or 0):.1f}x</div>
-        <div><strong>Last round</strong> {(co.get('last_round_type') or '—').replace('_', ' ').title()} · {sym}{float(co.get('last_round_amount') or 0)/1_000_000:.1f}M</div>
-        <div><strong>Post-money</strong> {sym}{float(co.get('post_money_valuation') or 0)/1_000_000:.0f}M</div>
+        <div><strong>Latest revenue</strong> {f'{sym}{float(co.get("arr") or co.get("revenue_ltm"))/1_000_000:.1f}M' if (co.get('arr') or co.get('revenue_ltm')) else '—'}</div>
+        <div><strong>Growth</strong> {f'{float(co.get("growth_rate")):.0f}%' if co.get('growth_rate') is not None else '—'}</div>
+        <div><strong>Gross margin</strong> {f'{float(co.get("gross_margin")):.0f}%' if co.get('gross_margin') is not None else '—'}</div>
+        <div><strong>Runway</strong> {f'{float(co.get("runway_months")):.0f} months' if co.get('runway_months') is not None else '—'}</div>
+        <div><strong>Source quality</strong> {f'{float(co.get("source_quality")):.0f}/100' if co.get('source_quality') is not None else '—'}</div>
+        <div><strong>Data source</strong> {(co.get('data_source') or '—').replace('_', ' ').title()}</div>
       </div>
       <h4>Top customers</h4>
       <ul class="deal-list">

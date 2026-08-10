@@ -35,7 +35,36 @@ def _normalize_ltm(slug_or_id: str) -> str:
         (cid,),
     )
     if not rows:
-        return "No financial rows."
+        annual = fetch_all(
+            """SELECT period_end,currency,revenue,gross_profit,profit_before_tax,
+                      net_profit,total_assets,liabilities,equity,employees,source
+               FROM fastvc.company_financial_periods WHERE company_id=%s
+               ORDER BY period_end ASC""",
+            (cid,),
+        )
+        if not annual:
+            return "No financial rows."
+        latest = annual[-1]
+        previous = annual[-2] if len(annual) > 1 else None
+        latest_revenue = float(latest["revenue"] or 0)
+        previous_revenue = float(previous["revenue"] or 0) if previous else 0
+        growth = ((latest_revenue / previous_revenue) - 1) * 100 if previous_revenue else None
+        artifact = {
+            "kind": "table",
+            "title": f"Annual filings — {co['name']}",
+            "subtitle": "Registry-filed annual data; no monthly interpolation or EBITDA estimate",
+            "columns": ["period_end", "revenue", "gross_profit", "profit_before_tax",
+                        "net_profit", "total_assets", "liabilities", "equity", "employees"],
+            "rows": annual,
+            "summary": {
+                "company": co["name"], "periods": len(annual),
+                "latest_revenue": latest_revenue,
+                "latest_revenue_growth_pct": round(growth, 2) if growth is not None else None,
+                "currency": latest["currency"], "source": latest["source"],
+                "note": "Annual statutory periods are preserved as filed.",
+            },
+        }
+        return "__ARTIFACT__" + json.dumps(artifact, default=str)
 
     rev = sum(float(r["revenue"] or 0) for r in rows)
     cogs = sum(float(r["cogs"] or 0) for r in rows)

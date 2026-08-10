@@ -106,6 +106,25 @@ def migrate(drop: bool = False) -> None:
     """)
 
     _apply("""
+        CREATE TABLE IF NOT EXISTS fastvc.user_credentials (
+            id              BIGSERIAL PRIMARY KEY,
+            user_id         BIGINT NOT NULL REFERENCES fastvc.users(id) ON DELETE CASCADE,
+            provider        TEXT NOT NULL,
+            label           TEXT NOT NULL,
+            login_url       TEXT,
+            secret_payload  TEXT NOT NULL,
+            metadata        JSONB NOT NULL DEFAULT '{}',
+            status          TEXT NOT NULL DEFAULT 'configured',
+            last_verified   TIMESTAMPTZ,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(user_id, provider)
+        );
+        CREATE INDEX IF NOT EXISTS user_credentials_user_idx
+            ON fastvc.user_credentials(user_id);
+    """)
+
+    _apply("""
         CREATE TABLE IF NOT EXISTS fastvc.digest_sends (
             id          SERIAL PRIMARY KEY,
             user_id     INTEGER NOT NULL REFERENCES fastvc.users(id),
@@ -169,6 +188,90 @@ def migrate(drop: bool = False) -> None:
         ALTER TABLE fastvc.companies ADD COLUMN IF NOT EXISTS fundraising_status TEXT;
         ALTER TABLE fastvc.companies ADD COLUMN IF NOT EXISTS momentum_score NUMERIC(5,2);
         ALTER TABLE fastvc.companies ADD COLUMN IF NOT EXISTS thesis_score NUMERIC(5,2);
+        ALTER TABLE fastvc.companies ADD COLUMN IF NOT EXISTS data_source TEXT;
+        ALTER TABLE fastvc.companies ADD COLUMN IF NOT EXISTS source_quality NUMERIC(5,2);
+        ALTER TABLE fastvc.companies ADD COLUMN IF NOT EXISTS source_updated_at TIMESTAMPTZ;
+        ALTER TABLE fastvc.companies ADD COLUMN IF NOT EXISTS registry_status TEXT;
+    """)
+
+    _apply("""
+        CREATE TABLE IF NOT EXISTS fastvc.ingestion_runs (
+            id BIGSERIAL PRIMARY KEY,
+            provider TEXT NOT NULL,
+            mode TEXT NOT NULL DEFAULT 'ingest',
+            status TEXT NOT NULL DEFAULT 'running',
+            requested_limit INTEGER,
+            processed INTEGER NOT NULL DEFAULT 0,
+            inserted INTEGER NOT NULL DEFAULT 0,
+            updated INTEGER NOT NULL DEFAULT 0,
+            skipped INTEGER NOT NULL DEFAULT 0,
+            errors INTEGER NOT NULL DEFAULT 0,
+            credits_used NUMERIC(12,2) NOT NULL DEFAULT 0,
+            cursor TEXT,
+            error_detail TEXT,
+            metadata JSONB NOT NULL DEFAULT '{}',
+            started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            finished_at TIMESTAMPTZ
+        );
+        CREATE INDEX IF NOT EXISTS ingestion_runs_provider_idx
+            ON fastvc.ingestion_runs(provider, started_at DESC);
+
+        CREATE TABLE IF NOT EXISTS fastvc.company_identifiers (
+            id BIGSERIAL PRIMARY KEY,
+            company_id BIGINT NOT NULL REFERENCES fastvc.companies(id) ON DELETE CASCADE,
+            source TEXT NOT NULL,
+            country_code TEXT NOT NULL,
+            identifier_type TEXT NOT NULL,
+            identifier_value TEXT NOT NULL,
+            is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+            source_url TEXT,
+            first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(source, country_code, identifier_type, identifier_value)
+        );
+        CREATE INDEX IF NOT EXISTS company_identifiers_company_idx
+            ON fastvc.company_identifiers(company_id);
+        CREATE INDEX IF NOT EXISTS company_identifiers_lookup_idx
+            ON fastvc.company_identifiers(country_code, identifier_type, identifier_value);
+
+        CREATE TABLE IF NOT EXISTS fastvc.company_source_records (
+            id BIGSERIAL PRIMARY KEY,
+            company_id BIGINT REFERENCES fastvc.companies(id) ON DELETE CASCADE,
+            source TEXT NOT NULL,
+            external_id TEXT NOT NULL,
+            source_url TEXT,
+            payload JSONB NOT NULL DEFAULT '{}',
+            payload_hash TEXT NOT NULL,
+            license TEXT,
+            fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(source, external_id, payload_hash)
+        );
+        CREATE INDEX IF NOT EXISTS company_source_records_company_idx
+            ON fastvc.company_source_records(company_id, fetched_at DESC);
+
+        CREATE TABLE IF NOT EXISTS fastvc.company_financial_periods (
+            id BIGSERIAL PRIMARY KEY,
+            company_id BIGINT NOT NULL REFERENCES fastvc.companies(id) ON DELETE CASCADE,
+            period_end DATE NOT NULL,
+            period_type TEXT NOT NULL DEFAULT 'annual',
+            currency TEXT NOT NULL DEFAULT 'EUR',
+            revenue NUMERIC(18,2),
+            gross_profit NUMERIC(18,2),
+            profit_before_tax NUMERIC(18,2),
+            net_profit NUMERIC(18,2),
+            total_assets NUMERIC(18,2),
+            current_assets NUMERIC(18,2),
+            non_current_assets NUMERIC(18,2),
+            liabilities NUMERIC(18,2),
+            equity NUMERIC(18,2),
+            employees INTEGER,
+            source TEXT NOT NULL,
+            source_external_id TEXT,
+            fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE(company_id, period_end, period_type, source)
+        );
+        CREATE INDEX IF NOT EXISTS company_financial_periods_company_idx
+            ON fastvc.company_financial_periods(company_id, period_end DESC);
     """)
 
     # Persons tables for investor prospecting.

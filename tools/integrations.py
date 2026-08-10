@@ -82,6 +82,90 @@ def mask_secret(value: str) -> str:
     return ("•" * 8) + value[-4:] if len(value) >= 4 else "•" * 8
 
 
+def mask_identity(value: str) -> str:
+    """Mask a login identity while leaving enough context to distinguish it."""
+    if not value:
+        return ""
+    if "@" in value:
+        local, domain = value.split("@", 1)
+        shown = local[:2] if len(local) > 1 else local[:1]
+        return f"{shown}{'•' * max(2, len(local) - len(shown))}@{domain}"
+    return f"{value[:2]}{'•' * max(4, len(value) - 2)}"
+
+
+def save_credential(user_id: int, provider: str, label: str, login_url: str = "",
+                    username: str = "", email: str = "", password: str = "",
+                    api_key: str = "", metadata: dict | None = None) -> None:
+    """Encrypt and upsert a portal credential owned by one FastVC user."""
+    if not provider.strip() or not label.strip():
+        raise ValueError("provider and label are required")
+    if not any((username, email, password, api_key)):
+        raise ValueError("at least one credential field is required")
+    payload = json.dumps({
+        "username": username.strip(),
+        "email": email.strip(),
+        "password": password,
+        "api_key": api_key.strip(),
+    })
+    execute(
+        """INSERT INTO fastvc.user_credentials
+           (user_id, provider, label, login_url, secret_payload, metadata,
+            status, last_verified)
+           VALUES (%s,%s,%s,%s,%s,%s::jsonb,'configured',now())
+           ON CONFLICT (user_id, provider) DO UPDATE SET
+             label=EXCLUDED.label, login_url=EXCLUDED.login_url,
+             secret_payload=EXCLUDED.secret_payload, metadata=EXCLUDED.metadata,
+             status='configured', last_verified=now(), updated_at=now()""",
+        (user_id, provider.strip().lower(), label.strip(), login_url.strip(),
+         encrypt_secret(payload), json.dumps(metadata or {})),
+    )
+
+
+def _credential_view(row: dict) -> dict:
+    try:
+        payload = json.loads(decrypt_secret(row["secret_payload"]) or "{}")
+    except (TypeError, json.JSONDecodeError):
+        payload = {}
+    identity = payload.get("email") or payload.get("username") or ""
+    return {
+        **row,
+        "secret_payload": "",
+        "masked_identity": mask_identity(identity),
+        "has_password": bool(payload.get("password")),
+        "masked_api_key": mask_secret(payload.get("api_key", "")),
+    }
+
+
+def list_credentials(user_id: int) -> list[dict]:
+    """Return display-safe credential metadata; plaintext is never returned."""
+    rows = fetch_all(
+        """SELECT provider,label,login_url,secret_payload,metadata,status,
+                  last_verified,created_at,updated_at
+           FROM fastvc.user_credentials WHERE user_id=%s ORDER BY label""",
+        (user_id,),
+    )
+    return [_credential_view(row) for row in rows]
+
+
+def load_credential(user_id: int, provider: str, *, reveal: bool = False) -> dict | None:
+    """Load one credential; plaintext is opt-in for server-side provider calls only."""
+    row = fetch_one(
+        """SELECT provider,label,login_url,secret_payload,metadata,status,
+                  last_verified,created_at,updated_at
+           FROM fastvc.user_credentials WHERE user_id=%s AND provider=%s""",
+        (user_id, provider.strip().lower()),
+    )
+    if not row:
+        return None
+    if not reveal:
+        return _credential_view(row)
+    try:
+        payload = json.loads(decrypt_secret(row["secret_payload"]) or "{}")
+    except (TypeError, json.JSONDecodeError):
+        payload = {}
+    return {**row, "secret_payload": "", **payload}
+
+
 def save_connection(user_id: int, provider: str, api_key: str,
                     domain: str = "", metadata: dict | None = None) -> None:
     if provider not in PROVIDERS:

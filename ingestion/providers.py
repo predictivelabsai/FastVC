@@ -45,10 +45,14 @@ class PappersClient(JsonProvider):
             raise ValueError("PAPPERS_API_KEY is required")
         self.api_key = api_key
 
-    def search(self, query: str, *, page: int = 1, per_page: int = 10) -> ProviderResponse:
-        data, headers = self._json("GET", f"{self.base_url}/recherche", params={
-            "api_token": self.api_key, "q": query, "page": page, "par_page": min(per_page, 100),
-        })
+    def search(self, query: str, *, page: int = 1, per_page: int = 10,
+               cursor: str | None = None) -> ProviderResponse:
+        params = {"api_token": self.api_key, "q": query}
+        if cursor is None:
+            params.update({"page": page, "par_page": min(per_page, 100)})
+        else:
+            params.update({"curseur": cursor, "par_curseur": min(per_page, 100)})
+        data, headers = self._json("GET", f"{self.base_url}/recherche", params=params)
         return ProviderResponse(data=data, credits_used=0.1 * len(data.get("resultats", [])))
 
     def company(self, siren: str) -> ProviderResponse:

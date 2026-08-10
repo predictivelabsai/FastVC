@@ -212,16 +212,20 @@ def fetch_provider_records(provider: str, limit: int, *, max_credits: float | No
 
     if provider == "pappers":
         client = PappersClient(api_key or cfg.pappers_api_key)
-        for page in range(1, math.ceil(limit / 100) + 1):
+        cursor = "*"
+        for _ in range(math.ceil(limit / 100)):
             requested = min(100, limit - len(records))
             projected = requested * 0.1
             if max_credits is not None and credits + projected > max_credits:
                 break
-            response = client.search("logiciel", page=page, per_page=requested)
+            response = client.search("logiciel", cursor=cursor, per_page=requested)
             rows = response.data.get("resultats") or []
             credits += response.credits_used
             add(rows, ("siren",))
             if len(rows) < requested:
+                break
+            cursor = str(response.data.get("curseurSuivant") or "")
+            if not cursor:
                 break
     elif provider == "scoris":
         client = ScorisClient(api_key or cfg.scoris_api_key)

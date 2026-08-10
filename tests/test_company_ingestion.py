@@ -4,6 +4,7 @@ from ingestion.models import NormalizedCompany
 from ingestion.normalize import clean_website, normalize_registry_record, slugify
 from ingestion.service import select_registry_cohort
 from ingestion.backfill import normalize_provider_record
+from ingestion.providers import PappersClient
 
 
 def test_registry_normalization_preserves_real_annual_periods():
@@ -71,3 +72,20 @@ def test_bulk_provider_normalizers_preserve_registry_identity():
     assert pappers and pappers.country == "FR" and pappers.employees == 12
     assert sirene and sirene.employees == 15 and sirene.registry_status == "active"
     assert prh and prh.website == "https://example.fi" and prh.registry_id == "1234567-8"
+
+
+def test_pappers_cursor_search_uses_cursor_parameters(monkeypatch):
+    client = PappersClient("test-key")
+    captured = {}
+
+    def fake_json(method, url, **kwargs):
+        captured.update(kwargs["params"])
+        return {"resultats": [{}], "curseurSuivant": "next"}, {}
+
+    monkeypatch.setattr(client, "_json", fake_json)
+    response = client.search("logiciel", cursor="*", per_page=100)
+
+    assert captured == {
+        "api_token": "test-key", "q": "logiciel", "curseur": "*", "par_curseur": 100,
+    }
+    assert response.credits_used == 0.1

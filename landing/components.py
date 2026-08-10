@@ -23,7 +23,8 @@ NAV_ITEMS = [
     ("nav_platform", "/platform"),
     ("nav_agents", "/agents"),
     ("nav_how", "/how-it-works"),
-    ("nav_pricing", "/pricing"),
+    ("nav_features", "/features"),
+    ("nav_compare", "/compare"),
     ("nav_partners", "/#partners"),
     ("nav_contact", "/contact"),
 ]
@@ -156,7 +157,8 @@ def _footer(lang: str = "en"):
                         Li(A(t("nav_platform", lang), href="/platform", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
                         Li(A(t("nav_agents", lang), href="/agents", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
                         Li(A(t("nav_how", lang), href="/how-it-works", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
-                        Li(A(t("nav_pricing", lang), href="/pricing", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
+                        Li(A(t("nav_features", lang), href="/features", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
+                        Li(A(t("nav_compare", lang), href="/compare", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
                         Li(A(t("footer_open_app", lang), href="/signin", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
                     ),
                 ),
@@ -175,7 +177,7 @@ def _footer(lang: str = "en"):
                     cls="text-ink-dim text-xs"),
                 (A(CONTACT_EMAIL, href=f"mailto:{CONTACT_EMAIL}",
                    cls="text-ink-dim text-xs hover:text-accent") if CONTACT_EMAIL else
-                 A("vc.fastsme.com", href="https://vc.fastsme.com",
+                 A("fastvc.org", href="https://fastvc.org",
                    cls="text-ink-dim text-xs hover:text-accent")),
                 cls="mt-10 md:mt-14 pt-6 border-t border-line flex items-start md:items-center justify-between flex-wrap gap-4",
             ),
@@ -253,7 +255,7 @@ def PartnersSection():
                 cls="min-w-0 rounded-2xl border border-line bg-bg-elevated p-5 text-ink no-underline transition hover:-translate-y-1 hover:border-accent",
             )
             for name, url, logo_url, description in PARTNERS
-        ], cls="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"),
+        ], cls="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"),
         cls="border-t border-line scroll-mt-20",
         section_id="partners",
     )

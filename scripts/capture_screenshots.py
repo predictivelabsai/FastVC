@@ -32,12 +32,12 @@ VIEWPORT = {"width": 1400, "height": 900}
 
 TOUR = [
     # (filename, url, wait_selector, full_page, post_action)
-    ("01-home-full.png",          "/",                       "text=specialist agents",       True,  None),
+    ("01-home-full.png",          "/",                       "text=Agent Squad",             True,  None),
     ("02-platform-full.png",      "/platform",               "text=One system",              True,  None),
     ("03-agents-full.png",        "/agents",                 "text=Every role",              True,  None),
-    ("04-agent-detail-triage.png","/agents/deal_triage",     "text=Deal Triage",             True,  None),
+    ("04-agent-detail-triage.png","/agents/deal_triage",     "text=Startup Screener",        True,  None),
     ("05-how-it-works-full.png",  "/how-it-works",           "text=From teaser",             True,  None),
-    ("06-pricing-full.png",       "/pricing",                "text=Start with",              True,  None),
+    ("06-pricing-full.png",       "/pricing",                "text=BYOD",                    True,  None),
     # Product screens
     ("07-chat-empty.png",         "/app",                    "#chat-input",                  False, None),
     ("08-chat-triage.png",        "/app",                    "#chat-input",                  False, "triage"),
@@ -50,21 +50,28 @@ TOUR = [
     ("13-pipeline-deal.png",      "/app/pipeline",           ".kanban-board",                False, "first_deal"),
     # Company search
     ("14-companies.png",          "/app/companies",          ".search-table",                False, None),
-    ("15-companies-health.png",   "/app/companies?sector=healthcare", ".search-table",       False, None),
+    ("15-companies-health.png",   "/app/companies?sector=healthtech", ".search-table",       False, None),
     # Analytics
     ("16-analytics-empty.png",    "/app/analytics",          "#analytics-q",                 False, None),
     ("17-analytics-stages.png",   "/app/analytics",          "#analytics-q",                 False, "stages"),
     ("18-analytics-sector.png",   "/app/analytics",          "#analytics-q",                 False, "ev_by_sector"),
     # Instructions
     ("19-instructions-list.png",  "/app/instructions",       ".instr-list",                  False, None),
-    ("20-instructions-edit.png",  "/app/instructions/deal_triage", ".instr-textarea",        False, None),
+    ("20-instructions-edit.png",  "/app/instructions/deal_triage", ".instr-edit",            False, None),
 ]
 
 
+# Demo prompts must name companies that exist in the synthetic seed, and use
+# the venture-native prefixes from agents/registry.py. The old Baltic/PE names
+# (DR VET, Kardiolita) are not in the seed and made the agents answer
+# "not available" or fall back to scraped web content.
 CHAT_MSGS = {
-    "triage":   "triage: DR VET veterinary clinic, €3.8M revenue, 76 employees, Vilnius",
-    "lbo":      "lbo: build a 5-year model for Kardiolita at 12% rev growth, 300bps margin exp",
-    "memo":     "memo: draft the IC memo for Kardiolita",
+    # Anchored on a seeded company and phrased as an internal-fit question so
+    # the screener uses get_startup rather than web_search. Synthetic company
+    # names match unrelated real companies on the open web.
+    "triage":   "Should we take a first meeting with Meridian Health? Use our own data.",
+    "lbo":      "round: model $8M Series A at $32M pre-money for Northwind AI",
+    "memo":     "memo: draft the Series A IC memo for Northwind AI",
 }
 
 ANALYTICS_QUERIES = {

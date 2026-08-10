@@ -21,6 +21,22 @@ The app uses the `fastvc` OLTP schema and `fastvc_rag` vector schema. Both are
 separate from PEHero while using the same PostgreSQL database configured by
 `DB_URL`.
 
+## Demo
+
+A click-through of the agent squad in conversation — screening a startup, modelling
+a round, drafting an IC memo — then the pipeline, company and analytics workspaces.
+
+![FastVC walkthrough](docs/fastvc.gif)
+
+Regenerate any time against a locally running server:
+
+```bash
+.venv/bin/python -m playwright install chromium   # one-off
+PORT=5059 .venv/bin/python main.py &              # server must be up
+.venv/bin/python -m scripts.capture_screenshots   # → screenshots/*.png
+.venv/bin/python -m scripts.make_gif              # → docs/fastvc.gif
+```
+
 ## Run locally
 
 ```bash
@@ -64,7 +80,7 @@ tests/        routing, agent construction, tools and UI smoke coverage
 ## Production deployment
 
 FastVC deploys from `main` to Coolify using the repository `Dockerfile`. The
-canonical production origin is `https://vc.fastsme.com`, the exposed container
+canonical production origin is `https://fastvc.org`, the exposed container
 port is `5059`, and the health path is `/healthz`. Set the variables listed in
 `.env.coolify.sample`; `docker-entrypoint.sh` runs the idempotent schema
 migration before starting the application. An authenticated GitHub Actions

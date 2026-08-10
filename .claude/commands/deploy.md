@@ -15,12 +15,12 @@ FastVC runs on Coolify with these environment variables:
 - `DB_URL` — PostgreSQL connection string
 - `XAI_API_KEY` — xAI Grok API key
 - `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` — Google OAuth
-- `SERVICE_URL` — public URL (`https://vc.fastsme.com`)
+- `SERVICE_URL` — public URL (`https://fastvc.org`)
 - `POSTMARK_API_TOKEN` — email delivery
 - `DIGEST_ENABLED` — 1/0, daily deals email
 - `DIGEST_HOUR` — hour in EET (default 7)
 
-Domain: `vc.fastsme.com`, port `5059`, health path `/healthz`.
+Domain: `fastvc.org`, port `5059`, health path `/healthz`.
 
 ## Deployment steps
 

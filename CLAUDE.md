@@ -14,7 +14,7 @@ All commands assume `source .venv/bin/activate` (or use `.venv/bin/python` direc
 
 ```bash
 # Setup
-cp .env.example .env                             # fill DB_URL + XAI_API_KEY
+cp .env.example .env                             # fill DB_URL + XAI_API_KEY + APP_SECRET
 pip install -r requirements.txt
 python -m db.migrate                             # idempotent; creates fastvc + fastvc_rag + pgvector
 python -m db.migrate --drop                      # DESTRUCTIVE — drops both schemas
@@ -29,8 +29,11 @@ python -m synthetic.generate --limit 5           # small subset for fast iterati
 PORT=5059 python main.py                         # :5059 is the default
 
 # Smoke tests (no LLM)
-pytest -q tests/test_agents_smoke.py             # 41 tests; build-every-agent, route, tool shape
+pytest -q tests/test_agents_smoke.py             # build-every-agent, route, tool shape
 pytest -q tests/test_agents_smoke.py::test_lbo_round_trip
+pytest -q tests/test_game.py                     # game engine + tools
+pytest -q tests/test_ee_public_data.py           # EE registry/public-data helpers
+pytest -q tests/test_agents_smoke.py -k "not test_rag_retrieval"   # what CI runs
 
 # Full regression — HITS the LLM, writes docs/regression-latest.md
 python -m tests.regression_suite                 # all 25 agents, their first example_prompt
@@ -90,7 +93,7 @@ python -m evals.run_game_eval                    # FastVC game eval
 # Docker / Coolify deploy
 docker compose up --build                        # local bring-up
 # Coolify: DB_URL + XAI_API_KEY + GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET
-#          + SERVICE_URL + POSTMARK_API_TOKEN; domain → vc.fastsme.com, port 5059.
+#          + SERVICE_URL + POSTMARK_API_TOKEN; domain → fastvc.org, port 5059.
 # docker-entrypoint.sh runs db.migrate on start. Synthetic seed stays manual:
 #   docker compose exec web python -m synthetic.generate --seed 42
 ```
@@ -99,8 +102,10 @@ docker compose up --build                        # local bring-up
 
 ### Routes (one FastHTML `app.py` mounts everything)
 
-- `/` + `/platform` + `/agents` + `/agents/<slug>` + `/how-it-works` + `/pricing` + `/contact` → `landing/`
-- `/app` → 3-pane chat product. SSE streaming at `POST /app/chat`. `chat/routes.py`.
+- `/healthz` → container + reverse-proxy health JSON. Defined directly in `app.py`.
+- `/` + `/platform` + `/agents` + `/agents/<slug>` + `/how-it-works` + `/features` + `/compare` + `/contact` (GET+POST) + `/set-lang/<code>` → `landing/routes.py`. `/pricing` is retired and 301s to `/features`; `FEATURE_GROUPS`, `INTEGRATION_GROUPS`, `COMPARE_ROWS` and `GAP_ROWS` are plain module-level data at the top of those routes — edit copy there, not in the markup.
+- `/app` → 3-pane chat product. SSE streaming at `POST /app/chat`. `/app/news` + `/app/news/html` serve the RSS panel. `chat/routes.py`.
+- `/app/discovery` + `POST /app/discovery/save` + `POST /app/discovery/<id>/delete` + `/app/signals` + `/app/founders` + `/app/market-map` → thesis-led startup discovery, saved searches, startup signals, founder browser, market map. `chat/discovery.py`.
 - `/app/pipeline` + `/app/pipeline/<slug>` → kanban board + per-deal workspace (chat + brief on right). `chat/pipeline.py`.
 - `/app/companies` + `/app/companies/<slug>` → company/portfolio browser. `chat/companies.py`.
 - `/app/investors` + `/app/investors/<slug>` → family office & investor prospecting (persons, wealth, company links). `chat/investors.py`.
@@ -122,7 +127,9 @@ docker compose up --build                        # local bring-up
 
 ### Agents (`agents/`)
 
-- `registry.py` holds all 25 `AgentSpec`s (slug, name, category, icon, prefix, one-liner, description, 4+ example_prompts). Categories: `sourcing (7) | underwriting (5) | diligence (5) | capital (4) | asset_mgmt (4)`. The display label for `asset_mgmt` is "Portfolio Operations".
+- `registry.py` holds `CATEGORIES` + the `AGENTS` tuple of 25 `AgentSpec`s. Specs are built through the positional helper `A(slug, name, category, icon, prefix, one_liner, description, *prompts)` — note the helper's argument order differs from the dataclass field order (the dataclass declares `one_liner, description, prefix`). Add new agents via `A(...)`, not a raw `AgentSpec(...)`.
+- Category keys and their public display labels (`CATEGORIES` in `registry.py` is the source of truth — don't hardcode these elsewhere):
+  `sourcing` → "Discovery & Sourcing" (7) · `underwriting` → "Round & Ownership" (5) · `diligence` → "Venture Diligence" (5) · `capital` → "IC & LP Relations" (4) · `asset_mgmt` → "Portfolio Support" (4).
 - `router.py` resolves a user message to a slug in three steps: explicit prefix → keyword score → LLM classifier. Falls back to `deal_triage`.
 - `base.py::cached_agent(slug)` imports `agents.<category>.<slug>` and calls `build()`. Every agent module exports `SPEC`, `TOOLS`, `build()`. `build()` reads `prompts/shared/vc_context.md` + `prompts/system/<slug>.md` and wraps tools in a LangGraph ReAct agent.
 - The chat route (`chat/routes.py`) prepends a `SystemMessage` with the session's currency preference on every run, so every specialist defaults to the user's currency without a prompt rewrite.
@@ -130,6 +137,8 @@ docker compose up --build                        # local bring-up
 ### Tools (`tools/`)
 
 - Filenames are legacy Bricksmith-CRE but contents are VC-native. `tools/rentroll.py` queries `fastvc.cap_tables`; `tools/properties.py` queries `fastvc.companies`; etc. Each module exports both a VC-native name (`search_companies`, `summarize_cap_table`, `normalize_ltm`, `build_lbo_model`, `size_debt_stack`, `abstract_contracts`, `audit_vdr`, …) and legacy aliases (`search_properties`, `summarize_rent_roll`, `normalize_t12`, `build_pro_forma`, `size_debt`, `abstract_leases`, `audit_doc_room`) for back-compat within agent modules.
+- `tools/venture.py` — the venture-native tool surface written for this product rather than inherited: `search_startups`, `get_startup`, `cap_table_snapshot`, `summarize_startup_metrics`, `recent_startup_signals`, `find_warm_paths`, `build_round_model`, `model_venture_outcome`. Prefer extending this module over the legacy CRE-named ones.
+- `tools/integrations.py` — BYOK provider config for `affinity | attio | pipedrive | brevo`. `PROVIDERS` is the metadata map; secrets are Fernet-encrypted (key derived from `APP_SECRET`) into `fastvc.user_integrations` and only ever returned masked unless `reveal=True`. Adapters deliberately stop at `test_stub()` — they validate and store configuration, they do not initiate live sync.
 - `tools/search.py` — Tavily (default) → EXA (fallback) web search. Wired into the 4 sourcing agents.
 - `tools/baltic.py` + `tools/registry/{ee,lt,lv}.py` — uniform `baltic_lookup / baltic_filings / baltic_tax_status` surface. Returns `stub=True` until the country API keys are set. Full setup in `docs/registry_integration.md`.
 - `tools/rag.py` → semantic search over `fastvc_rag.documents` via `rag/retriever.py`.
@@ -138,14 +147,16 @@ docker compose up --build                        # local bring-up
 
 ### Data model (`db/schema.sql`)
 
-Core tables all live in `fastvc.*`:
-`companies, funds, cap_tables, financials (monthly), contracts, transaction_comps, trading_comps, lbo_models, debt_stacks, investor_crm, market_signals, dd_findings, deal_risks, deal_milestones, portfolio_kpis, users, user_preferences, chat_sessions, chat_messages, agent_invocations, prompt_versions, data_room, pipedrive_sync, outreach_sequences, user_integrations, digest_sends, persons, person_company_links`.
+Core tables all live in `fastvc.*`. Declared in `db/schema.sql`:
+`companies, funds, cap_tables, financials (monthly), contracts, transaction_comps, trading_comps, lbo_models, debt_stacks, investor_crm, market_signals, dd_findings, deal_risks, deal_milestones, portfolio_kpis, users, chat_sessions, chat_messages, agent_invocations, prompt_versions, data_room, pipedrive_sync, outreach_sequences, user_integrations, persons, person_company_links` plus the venture-native set `founders, founder_company_links, funding_rounds, round_models, outcome_models, saved_searches, startup_signals, market_maps, team_connections`.
+
+A few tables are *not* in `schema.sql` — `db/migrate.py` creates/patches them with `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE … ADD COLUMN IF NOT EXISTS` so existing deployments migrate in place: `user_preferences, digest_sends`, and the auth columns on `users`. When adding a column to a table that already ships in production, follow that pattern in `migrate.py` rather than editing `schema.sql` alone.
 
 `fastvc_rag.*` holds `documents, chunks, embeddings (vector({{EMBEDDING_DIM}}))`. `EMBEDDING_DIM` is substituted at migrate time — changing it requires `db.migrate --drop` and re-indexing.
 
 ### Front-end (`chat/components.py` + `static/`)
 
-- Left pane: New-chat + session list, agent browser (5 categories × 25 agents), Workspace (Pipeline / Companies / Investors / Data Room / Instructions / Analytics / Valuation / Portfolio / Integrations), Training (User Guide + FastVC Game), Configuration (currency + language switcher). All routes pass `current_currency=get_currency(sess)` and `lang=get_lang(sess)` to `left_pane()`.
+- Left pane (`left_pane()` in `chat/components.py`): New-chat + session list, agent browser (5 categories × 25 agents), Workspace (Discovery / Signals / Market Map / Founders / Pipeline / Companies / Investors / Data Room / Instructions / Analytics / Valuation / Portfolio), an Integrations group with per-provider anchors (`/app/integrations#affinity|attio|pipedrive|brevo`), Training (User Guide + FastVC Game), Configuration (currency + language switcher). All routes pass `current_currency=get_currency(sess)` and `lang=get_lang(sess)` to `left_pane()`.
 - `static/app.css` holds base chat + left-pane + thinking indicator + follow-up + sample-cards + currency-chip rules. `static/pipeline.css` holds kanban + deal-detail + instructions + analytics rules (pipeline.css is only loaded on those routes; anything that also appears on `/app` must live in `app.css`).
 - `static/chat.js` handles SSE streaming, thinking-indicator (timer + rotating tool name), contextual sample cards (per agent — prompt tables embedded as `<script id="agent-prompts-data">`), the "Next step — Yes / No" follow-up pattern, Copy chat / Share link (clipboard + `POST /app/share`), memo → PDF/Word export, table → CSV/XLS export + Plotly visualize, and the currency/language selectors.
 
@@ -166,11 +177,16 @@ Core tables all live in `fastvc.*`:
 
 ### Session state
 
-Cookies via Starlette's `SessionMiddleware`. Helpers in `utils/session.py`: `get_user_email`, `get_user_id`, `get_currency` (EUR default), `set_currency`, `currency_symbol`. Constants `CURRENCIES = ("EUR", "GBP", "USD")`, `SYMBOLS = {"EUR": "€", "GBP": "£", "USD": "$"}`. Language helpers in `utils/i18n.py`: `get_lang`, `set_lang`, `t()` (UI string lookup), `agent_t()` (agent name/description lookup). IP-based language auto-detection for Baltic visitors.
+Cookies via Starlette's `SessionMiddleware`. Helpers in `utils/session.py`: `get_user_email`, `get_user_id`, `get_currency` (EUR default), `set_currency`, `currency_symbol`. Constants `CURRENCIES = ("EUR", "GBP", "USD")`, `SYMBOLS = {"EUR": "€", "GBP": "£", "USD": "$"}`. Language helpers in `utils/i18n.py`: `get_lang`, `set_lang`, `t()` (UI string lookup), `agent_t()` (agent name/description lookup). IP-based language auto-detection for Baltic visitors. The language list lives in `LANGUAGES` / `SUPPORTED_LANGS` in `utils/i18n.py`.
+
+### Process model (`main.py` → `app.py`)
+
+`main.py` is the entrypoint shim: it calls `setup_logging()`, imports `app`, then starts two daemon threads before serving — an RSS warm-up (`utils.news.fetch_news`, joined with an 8 s timeout so boot isn't blocked) and the daily-deals digest loop. It serves with `reload=False` deliberately: a single deterministic process avoids duplicate scheduler threads and file-watcher exhaustion against the local `.venv`. Don't re-enable reload or move the threads into `app.py` — `app.py` must stay importable without side effects for the CI import check.
 
 ## Conventions
 
-- **All LLM calls** go through `utils.llm.build_llm()` / `build_agent_llm()` — never construct `ChatOpenAI` elsewhere.
+- **All config** goes through `utils.config.settings()` (a cached pydantic-settings object) — never read `os.environ` in route or tool code. Add a new knob as a `Field(default=…, alias="ENV_NAME")` there and document it in `.env.example`.
+- **All LLM calls** go through `utils.llm.build_llm()` / `build_agent_llm()` — never construct `ChatOpenAI` elsewhere. Defaults: `XAI_MODEL=grok-4-fast-reasoning` for chat, `XAI_AGENT_MODEL=grok-4` for agents.
 - Schemas `fastvc.*` and `fastvc_rag.*` are always qualified in SQL — never rely on `search_path`.
 - Synthetic data is deterministic given `--seed`. Keep it that way so the smoke tests stay stable.
 - User-facing copy does **not** mention "25 agents" or "$0 / synthetic data". Use "squad" language and "BYOD — bring your own data". Internal docstrings and this file can still mention the count.
@@ -251,7 +267,13 @@ pytest -q tests/test_agents_smoke.py
 
 # 3. Offline boot check — every route module that app.py imports at
 #    startup must import cleanly with only what's installed.
-.venv/bin/python -c "from app import app; from chat import routes, pipeline, instructions, analytics, companies, memo_pdf, exports, dataroom, help, valuation, webhooks, integrations, training, investors, portfolio; from auth import routes as _auth; print('app imports OK')"
+.venv/bin/python -c "from app import app; from chat import routes, pipeline, instructions, analytics, companies, memo_pdf, exports, dataroom, help, valuation, webhooks, integrations, training, investors, portfolio, discovery; from auth import routes as _auth; print('app imports OK')"
 ```
 
 Only push once all three pass. If you added a new dependency, pin it with a lower bound (`pkg>=X.Y.0`) in `requirements.txt` in the same commit that introduces the import.
+
+**The import list is duplicated in `.github/workflows/ci.yml` ("Import check" step). When you add a `chat/` route module to `app.py`, update all three places — `app.py`, the check above, and `ci.yml` — in the same commit.** A module imported by `app.py` but absent from the checks is exactly the failure mode this block exists to catch: the container starts, `app.py` raises on import, and every route 404s.
+
+## CI / deploy pipeline
+
+`.github/workflows/ci.yml` on push + PR to `main`: spins up `pgvector/pgvector:pg16`, `pip install -r requirements.txt`, `python -m db.migrate`, `synthetic.generate --seed 42 --limit 5 --skip-rag`, the import check, then `pytest -q tests/test_agents_smoke.py -k "not test_rag_retrieval"`. On a green push to `main` the `deploy` job curls `COOLIFY_WEBHOOK_URL` with `COOLIFY_TOKEN` — **merging to `main` ships to production**. Production origin is `https://fastvc.org`, port `5059`, health path `/healthz`; variables come from `.env.coolify.sample`.

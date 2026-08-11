@@ -8,6 +8,22 @@ from db import connect, fetch_one
 from utils.news import DEFAULT_SOURCE_IDS, normalise_source_ids
 
 
+# Users who explicitly saved the former default selection should move with the
+# product default. Deliberate custom subsets continue to be respected.
+_LEGACY_DEFAULT_SOURCE_IDS = frozenset({
+    "techcrunch_startups", "eu_startups", "sifted", "crunchbase_news",
+    "tech_eu", "arctic_startup", "seedcamp", "pe_hub",
+    "private_equity_international", "ft_private_equity",
+    "bloomberg_private_markets",
+})
+
+
+def _saved_selection_or_defaults(values: object) -> tuple[str, ...]:
+    if not isinstance(values, list) or frozenset(values) == _LEGACY_DEFAULT_SOURCE_IDS:
+        return DEFAULT_SOURCE_IDS
+    return normalise_source_ids(values)
+
+
 def get_news_source_ids(user_id: int | None) -> tuple[str, ...]:
     if not user_id:
         return DEFAULT_SOURCE_IDS
@@ -19,7 +35,7 @@ def get_news_source_ids(user_id: int | None) -> tuple[str, ...]:
     except Exception:
         return DEFAULT_SOURCE_IDS
     values = row.get("news_source_ids") if row else None
-    return normalise_source_ids(values if isinstance(values, list) else None)
+    return _saved_selection_or_defaults(values)
 
 
 def save_news_source_ids(user_id: int, source_ids: list[str]) -> tuple[str, ...]:

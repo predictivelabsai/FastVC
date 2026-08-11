@@ -1,7 +1,16 @@
 from agents.router import route_intent
 from chat.suggestions import agent_prompt_map, welcome_suggestions
 from utils.news import (
-    DEFAULT_SOURCE_IDS, _is_relevant, available_sources, normalise_source_ids,
+    DEFAULT_SOURCE_IDS, _is_relevant, _limit_with_source_coverage,
+    available_sources, normalise_source_ids,
+)
+from utils.news_preferences import _saved_selection_or_defaults
+
+
+EUROPE_DEFAULTS = (
+    "sifted", "tech_eu", "eu_startups", "tech_funding_news",
+    "silicon_canals", "techcrunch_europe", "startus_magazine",
+    "peak_capital", "deutsche_startups", "invest_europe",
 )
 
 
@@ -9,9 +18,39 @@ def test_news_catalogue_is_focused_and_configurable():
     sources = available_sources()
     ids = {source["id"] for source in sources}
     assert {"ft_private_equity", "bloomberg_private_markets", "techcrunch_startups"} <= ids
+    assert DEFAULT_SOURCE_IDS == EUROPE_DEFAULTS
+    assert all(next(source for source in sources if source["id"] == source_id)["default"]
+               for source_id in EUROPE_DEFAULTS)
     assert not {"bbc_business", "reuters_business", "wsj_world"} & ids
     assert normalise_source_ids(["saastr", "not-a-source"]) == ("saastr",)
     assert normalise_source_ids([]) == DEFAULT_SOURCE_IDS
+
+
+def test_saved_former_defaults_rotate_but_custom_choices_remain():
+    former_defaults = [
+        "techcrunch_startups", "eu_startups", "sifted", "crunchbase_news",
+        "tech_eu", "arctic_startup", "seedcamp", "pe_hub",
+        "private_equity_international", "ft_private_equity",
+        "bloomberg_private_markets",
+    ]
+    assert _saved_selection_or_defaults(former_defaults) == EUROPE_DEFAULTS
+    assert _saved_selection_or_defaults(["sifted", "tech_eu"]) == ("sifted", "tech_eu")
+
+
+def test_news_limit_reserves_a_slot_for_every_selected_source():
+    articles = [
+        {
+            "source_id": "fast", "url": f"https://fast.example/{index}",
+            "published": f"2026-08-11T12:{59 - index:02d}:00+00:00",
+        }
+        for index in range(5)
+    ] + [{
+        "source_id": "slow", "url": "https://slow.example/latest",
+        "published": "2026-07-01T12:00:00+00:00",
+    }]
+    limited = _limit_with_source_coverage(articles, ("fast", "slow"), limit=3)
+    assert len(limited) == 3
+    assert {article["source_id"] for article in limited} == {"fast", "slow"}
 
 
 def test_bloomberg_filter_admits_private_markets_not_macro_politics():

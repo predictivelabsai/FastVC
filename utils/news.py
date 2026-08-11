@@ -21,22 +21,31 @@ log = logging.getLogger(__name__)
 
 
 NEWS_SOURCES: tuple[dict, ...] = (
-    {"id": "techcrunch_startups", "name": "TechCrunch Startups", "url": "https://techcrunch.com/category/startups/feed/", "homepage": "https://techcrunch.com/category/startups/", "category": "Startups", "description": "Funding, founders and startup operating news.", "icon": "TC", "default": True},
-    {"id": "eu_startups", "name": "EU-Startups", "url": "https://www.eu-startups.com/feed/", "homepage": "https://www.eu-startups.com/", "category": "Europe", "description": "European startup launches, rounds and ecosystem news.", "icon": "EU", "default": True},
-    {"id": "sifted", "name": "Sifted", "url": "https://sifted.eu/feed", "homepage": "https://sifted.eu/", "category": "Europe", "description": "European startup and venture reporting.", "icon": "SFT", "default": True},
-    {"id": "crunchbase_news", "name": "Crunchbase News", "url": "https://news.crunchbase.com/feed/", "homepage": "https://news.crunchbase.com/", "category": "Venture", "description": "Data-led reporting on private markets, startups and investors.", "icon": "CB", "default": True},
-    {"id": "tech_eu", "name": "Tech.eu", "url": "https://tech.eu/feed/", "homepage": "https://tech.eu/", "category": "Europe", "description": "European technology companies, investment and exits.", "icon": "TEU", "default": True},
-    {"id": "arctic_startup", "name": "ArcticStartup", "url": "https://arcticstartup.com/feed/", "homepage": "https://arcticstartup.com/", "category": "Nordics", "description": "Nordic and Baltic startup and funding news.", "icon": "ARC", "default": True},
-    {"id": "silicon_canals", "name": "Silicon Canals", "url": "https://siliconcanals.com/feed/", "homepage": "https://siliconcanals.com/", "category": "Europe", "description": "European startup funding and technology coverage.", "icon": "SC", "default": False},
+    # The ten Europe-focused sources selected for every user by default.
+    {"id": "sifted", "name": "Sifted", "url": "https://sifted.eu/feed", "homepage": "https://sifted.eu/", "category": "European startup news", "description": "Pan-European startup, founder, funding and venture reporting.", "icon": "SFT", "default": True},
+    {"id": "tech_eu", "name": "Tech.eu", "url": "https://tech.eu/feed", "homepage": "https://tech.eu/", "category": "European startup news", "description": "European technology companies, investment rounds and exits.", "icon": "TEU", "default": True},
+    {"id": "eu_startups", "name": "EU-Startups", "url": "https://www.eu-startups.com/feed/", "homepage": "https://www.eu-startups.com/", "category": "European startup news", "description": "European startup launches, funding rounds and ecosystem news.", "icon": "EU", "default": True},
+    {"id": "tech_funding_news", "name": "Tech Funding News", "url": "https://techfundingnews.com/feed/", "homepage": "https://techfundingnews.com/", "category": "European startup news", "description": "Funding rounds, venture activity and startup news across Europe.", "icon": "TFN", "default": True},
+    {"id": "silicon_canals", "name": "Silicon Canals", "url": "https://siliconcanals.com/feed/", "homepage": "https://siliconcanals.com/", "category": "European startup news", "description": "European and Benelux startup funding and technology coverage.", "icon": "SC", "default": True},
+    {"id": "techcrunch_europe", "name": "TechCrunch Europe", "url": "https://techcrunch.com/region/europe/feed/", "homepage": "https://techcrunch.com/region/europe/", "category": "European startup news", "description": "TechCrunch reporting focused on European startups and technology.", "icon": "TC", "default": True},
+    {"id": "startus_magazine", "name": "StartUs Magazine", "url": "https://magazine.startus.cc/feed/", "homepage": "https://magazine.startus.cc/", "category": "European startup news", "description": "European startup, innovation and technology intelligence.", "icon": "SU", "default": True},
+    {"id": "peak_capital", "name": "Peak Capital", "url": "https://peak.capital/feed/", "homepage": "https://peak.capital/", "category": "European VC thinking", "description": "Early-stage European VC perspectives, investments and founder advice.", "icon": "PK", "default": True},
+    {"id": "deutsche_startups", "name": "Deutsche Startups", "url": "https://www.deutsche-startups.de/feed/", "homepage": "https://www.deutsche-startups.de/", "category": "European startup news", "description": "German-language coverage of DACH startups, funding and exits.", "icon": "DS", "default": True},
+    {"id": "invest_europe", "name": "Invest Europe", "url": "https://www.investeurope.eu/rss/", "homepage": "https://www.investeurope.eu/news/", "category": "European private capital", "description": "European venture-capital and private-equity industry news and analysis.", "icon": "IE", "default": True},
+
+    # Additional focused sources remain available as optional user choices.
+    {"id": "techcrunch_startups", "name": "TechCrunch Startups", "url": "https://techcrunch.com/category/startups/feed/", "homepage": "https://techcrunch.com/category/startups/", "category": "Additional startup news", "description": "Global funding, founders and startup operating news.", "icon": "TC", "default": False},
+    {"id": "crunchbase_news", "name": "Crunchbase News", "url": "https://news.crunchbase.com/feed/", "homepage": "https://news.crunchbase.com/", "category": "Additional venture news", "description": "Data-led reporting on private markets, startups and investors.", "icon": "CB", "default": False},
+    {"id": "arctic_startup", "name": "ArcticStartup", "url": "https://arcticstartup.com/feed/", "homepage": "https://arcticstartup.com/", "category": "Nordics", "description": "Nordic and Baltic startup and funding news.", "icon": "ARC", "default": False},
     {"id": "uktn", "name": "UKTN", "url": "https://www.uktech.news/feed", "homepage": "https://www.uktech.news/", "category": "United Kingdom", "description": "UK technology startup, funding and policy news.", "icon": "UK", "default": False},
-    {"id": "seedcamp", "name": "Seedcamp", "url": "https://seedcamp.com/feed/", "homepage": "https://seedcamp.com/", "category": "VC thinking", "description": "Operator and early-stage investor perspectives.", "icon": "SDC", "default": True},
+    {"id": "seedcamp", "name": "Seedcamp", "url": "https://seedcamp.com/feed/", "homepage": "https://seedcamp.com/", "category": "Additional VC thinking", "description": "Operator and early-stage investor perspectives.", "icon": "SDC", "default": False},
     {"id": "saastr", "name": "SaaStr", "url": "https://www.saastr.com/feed/", "homepage": "https://www.saastr.com/", "category": "VC thinking", "description": "SaaS growth, fundraising and operating benchmarks.", "icon": "SAS", "default": False},
     {"id": "avc", "name": "AVC", "url": "https://feeds.feedblitz.com/avc", "homepage": "https://avc.com/", "category": "VC thinking", "description": "Long-running venture and company-building essays.", "icon": "AVC", "default": False},
     {"id": "vc_cafe", "name": "VC Cafe", "url": "https://www.vccafe.com/feed/", "homepage": "https://www.vccafe.com/", "category": "VC thinking", "description": "Venture capital, AI and startup ecosystem analysis.", "icon": "VCC", "default": False},
-    {"id": "pe_hub", "name": "PE Hub", "url": "https://www.pehub.com/feed/", "homepage": "https://www.pehub.com/", "category": "Private equity", "description": "Private-equity deals, funds and portfolio-company news.", "icon": "PEH", "default": True},
-    {"id": "private_equity_international", "name": "Private Equity International", "url": "https://www.privateequityinternational.com/feed/", "homepage": "https://www.privateequityinternational.com/", "category": "Private equity", "description": "Institutional private-equity fundraising and deal coverage.", "icon": "PEI", "default": True},
-    {"id": "ft_private_equity", "name": "Financial Times · Private Equity", "url": "https://www.ft.com/private-equity?format=rss", "homepage": "https://www.ft.com/private-equity", "category": "Private equity", "description": "FT reporting from its dedicated private-equity topic.", "icon": "FT", "default": True},
-    {"id": "bloomberg_private_markets", "name": "Bloomberg · Private Markets", "url": "https://feeds.bloomberg.com/markets/news.rss", "homepage": "https://www.bloomberg.com/markets", "category": "Private markets", "description": "Bloomberg Markets items admitted only when explicitly relevant to venture, private equity or deals.", "icon": "BBG", "default": True, "strict": True},
+    {"id": "pe_hub", "name": "PE Hub", "url": "https://www.pehub.com/feed/", "homepage": "https://www.pehub.com/", "category": "Additional private equity", "description": "Private-equity deals, funds and portfolio-company news.", "icon": "PEH", "default": False},
+    {"id": "private_equity_international", "name": "Private Equity International", "url": "https://www.privateequityinternational.com/feed/", "homepage": "https://www.privateequityinternational.com/", "category": "Additional private equity", "description": "Institutional private-equity fundraising and deal coverage.", "icon": "PEI", "default": False},
+    {"id": "ft_private_equity", "name": "Financial Times · Private Equity", "url": "https://www.ft.com/private-equity?format=rss", "homepage": "https://www.ft.com/private-equity", "category": "Additional private equity", "description": "FT reporting from its dedicated private-equity topic.", "icon": "FT", "default": False},
+    {"id": "bloomberg_private_markets", "name": "Bloomberg · Private Markets", "url": "https://feeds.bloomberg.com/markets/news.rss", "homepage": "https://www.bloomberg.com/markets", "category": "Additional private markets", "description": "Bloomberg Markets items admitted only when explicitly relevant to venture, private equity or deals.", "icon": "BBG", "default": False, "strict": True},
 )
 
 # Backwards-compatible alias used by a few external scripts.
@@ -154,6 +163,25 @@ def _fetch_one(source: dict) -> list[dict]:
     return articles
 
 
+def _limit_with_source_coverage(
+    articles: list[dict], selected_ids: tuple[str, ...], limit: int = 80,
+) -> list[dict]:
+    """Keep the newest items while reserving one slot per selected source."""
+    ordered = sorted(articles, key=lambda article: article["published"], reverse=True)
+    representatives: list[dict] = []
+    representative_urls: set[str] = set()
+    for source_id in selected_ids:
+        article = next((item for item in ordered if item["source_id"] == source_id), None)
+        if article and article["url"] not in representative_urls:
+            representatives.append(article)
+            representative_urls.add(article["url"])
+
+    remaining = [article for article in ordered if article["url"] not in representative_urls]
+    result = representatives + remaining[:max(0, limit - len(representatives))]
+    result.sort(key=lambda article: article["published"], reverse=True)
+    return result[:limit]
+
+
 async def fetch_news(source_ids: list[str] | tuple[str, ...] | None = None) -> list[dict]:
     """Fetch selected feeds and return a merged, deduplicated, recent list."""
     selected_ids = normalise_source_ids(source_ids)
@@ -183,8 +211,7 @@ async def fetch_news(source_ids: list[str] | tuple[str, ...] | None = None) -> l
             if article["url"] not in seen_urls:
                 seen_urls.add(article["url"])
                 articles.append(article)
-    articles.sort(key=lambda article: article["published"], reverse=True)
-    return articles[:80]
+    return _limit_with_source_coverage(articles, selected_ids)
 
 
 async def fetch_news_translated(

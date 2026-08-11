@@ -84,9 +84,9 @@ def news_sources_home(sess, saved: str = ""):
                 Div(copilot_toggle_btn(lang=lang), cls="chat-header-actions"), cls="chat-header"),
             Div(
                 H2("Choose the intelligence in your news feed"),
-                P("FastVC includes focused startup, venture-capital and private-equity sources. "
-                  "General macro and political feeds are excluded. Bloomberg articles pass a "
-                  "private-markets filter, and FT uses its dedicated Private Equity feed."),
+                P("The ten leading Europe-focused startup and VC feeds are selected for every "
+                  "user by default. Additional focused sources remain optional, while general "
+                  "macro and political feeds are excluded."),
                 P("News-source preferences saved." if saved else "", cls="auth-success"),
                 (Form(
                     *sections,

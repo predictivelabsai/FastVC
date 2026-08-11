@@ -24,8 +24,8 @@ NAV_ITEMS = [
     ("nav_agents", "/agents"),
     ("nav_how", "/how-it-works"),
     ("nav_features", "/features"),
+    ("nav_open_source", "/open-source"),
     ("nav_compare", "/compare"),
-    ("nav_partners", "/#partners"),
     ("nav_contact", "/contact"),
 ]
 
@@ -158,6 +158,7 @@ def _footer(lang: str = "en"):
                         Li(A(t("nav_agents", lang), href="/agents", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
                         Li(A(t("nav_how", lang), href="/how-it-works", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
                         Li(A(t("nav_features", lang), href="/features", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
+                        Li(A(t("nav_open_source", lang), href="/open-source", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
                         Li(A(t("nav_compare", lang), href="/compare", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
                         Li(A(t("footer_open_app", lang), href="/signin", cls="text-sm text-ink hover:text-accent"), cls="mb-2"),
                     ),
@@ -277,12 +278,13 @@ def Hero(lang: str = "en"):
             Div(cls="absolute inset-0 z-20 bg-gradient-to-b from-bg/40 via-transparent to-bg pointer-events-none"),
             Div(
                 Eyebrow(t("hero_eyebrow", lang)),
+                Div(Pill(t("oss_badge", lang)), cls="mt-5"),
                 H1(*headline,
                    cls="mt-5 md:mt-6 text-[40px] sm:text-5xl md:text-7xl lg:text-[84px] font-medium tracking-tightest text-ink leading-[1.05] md:leading-[1.02] max-w-5xl"),
                 P(t("hero_lede", lang), cls="mt-6 md:mt-8 text-base md:text-xl text-ink-muted max-w-2xl leading-relaxed"),
                 Div(
                     Button_(t("hero_cta_open", lang), href="/signin", primary=True),
-                    Button_(t("hero_cta_meet", lang), href="/agents", primary=False),
+                    Button_(t("oss_explore", lang), href="/open-source", primary=False),
                     cls="mt-8 md:mt-10 flex items-center gap-3 flex-wrap",
                 ),
                 cls="relative z-30 max-w-7xl mx-auto px-5 md:px-6 py-24 md:py-0",
@@ -545,19 +547,19 @@ def PENewsSection(lang: str = "en"):
 
 
 def CTASection(*, headline: str | None = None, body: str | None = None,
-               cta_label: str | None = None, cta_href: str = "/contact", lang: str = "en"):
-    _headline = headline or t("cta_headline", lang)
-    _body = body or t("cta_body", lang)
-    _cta_label = cta_label or t("cta_book", lang)
+               cta_label: str | None = None, cta_href: str = "/signin", lang: str = "en"):
+    _headline = headline or t("oss_cta_headline", lang)
+    _body = body or t("oss_cta_body", lang)
+    _cta_label = cta_label or t("oss_cta_start", lang)
     return Section(
         Div(
             Div(
-                Eyebrow(t("cta_eyebrow", lang)),
+                Eyebrow(t("oss_cta_eyebrow", lang)),
                 Heading(2, _headline, cls="mt-3 max-w-3xl"),
                 P(_body, cls="mt-5 text-ink-muted text-lg max-w-2xl leading-relaxed"),
                 Div(
                     Button_(_cta_label, href=cta_href, primary=True),
-                    Button_(t("cta_byod", lang), href="/signin", primary=False),
+                    Button_(t("oss_view_source", lang), href=GITHUB_URL, primary=False),
                     cls="mt-8 flex items-center gap-3 flex-wrap",
                 ),
                 cls="max-w-7xl mx-auto px-5 md:px-6 py-20 md:py-28 relative z-10",

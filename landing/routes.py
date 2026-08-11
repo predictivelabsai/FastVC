@@ -1,5 +1,4 @@
-"""Marketing routes: /, /platform, /agents, /agents/<slug>, /how-it-works, /features,
-/compare, /contact. /pricing is retired and redirects to /features."""
+"""Marketing routes including the product, open-source and contact surfaces."""
 
 from __future__ import annotations
 
@@ -67,10 +66,43 @@ def home(sess):
         cls="border-t border-line",
     )
 
+    open_source = Section_(
+        Div(
+            Eyebrow(t("oss_badge", lang)),
+            Heading(2, "Your fund's operating system should become your edge — not your vendor's.",
+                    cls="mt-3 max-w-4xl"),
+            P("FastVC is free and fully open source under Apache 2.0. Run it on your "
+              "infrastructure, keep confidential deal data in your security boundary, and "
+              "adapt the agents, ranking logic and workflows to how your firm invests.",
+              cls="mt-5 text-ink-muted text-lg max-w-3xl leading-relaxed"),
+            Div(
+                Button_(t("oss_explore", lang), href="/open-source", primary=True),
+                Button_(t("oss_view_source", lang), href=GITHUB_URL, primary=False),
+                cls="mt-8 flex items-center gap-3 flex-wrap",
+            ),
+            cls="md:col-span-2",
+        ),
+        Div(
+            *[Article(
+                P(title, cls="text-ink font-medium mb-2"),
+                P(body, cls="text-ink-muted text-sm leading-relaxed"),
+                cls="p-6 rounded-2xl border border-line bg-bg-elevated h-full",
+            ) for title, body in [
+                ("Data sovereignty", "Your database, infrastructure and model endpoint remain under your control."),
+                ("Private by design", "Pipeline, data-room and IC context need not leave your chosen security boundary."),
+                ("Auditable", "Inspect every prompt, tool, scoring rule and source before trusting an answer."),
+                ("Built for differentiation", "Fork the workflow into a proprietary information system tailored to your thesis."),
+            ]],
+            cls="grid sm:grid-cols-2 gap-4 mt-10",
+        ),
+        cls="border-t border-line bg-accent/5",
+    )
+
     return page(
         t("hero_eyebrow", lang),
         Hero(lang=lang),
         ProductTour(lang=lang),
+        open_source,
         pillars,
         how,
         CaseStudyStrip(lang=lang),
@@ -78,6 +110,67 @@ def home(sess):
         PartnersSection(),
         CTASection(lang=lang),
         current_path="/",
+        lang=lang,
+    )
+
+
+# ── /open-source ────────────────────────────────────────────────────
+@rt("/open-source")
+def open_source_page(sess):
+    lang = get_lang(sess)
+    advantages = [
+        ("Data sovereignty", "Deploy FastVC in infrastructure you control. Your pipeline, "
+         "company intelligence, data-room documents and investment history stay in your "
+         "database and under your retention policies."),
+        ("Privacy without a black box", "Choose the model endpoint and data providers. "
+         "Audit credential handling and retrieval paths in source instead of relying on "
+         "a vendor's assurances."),
+        ("Logic you can inspect", "Every agent instruction, tool, routing decision and "
+         "scoring rule is readable. Your team can challenge the reasoning and change it."),
+        ("A compounding information advantage", "Encode your thesis, sourcing heuristics, "
+         "diligence playbooks and portfolio pattern recognition. The system becomes more "
+         "specific to your firm instead of converging on the same SaaS workflow as every peer."),
+    ]
+    return page(
+        t("nav_open_source", lang),
+        Section_(
+            Eyebrow(t("oss_badge", lang)),
+            Heading(1, "Own the system that compounds your venture intelligence.",
+                    cls="mt-4 max-w-5xl"),
+            P("FastVC's complete application source is available under Apache 2.0. There are "
+              "no software licence or per-seat fees: use it, self-host it, audit it and modify "
+              "it into an operating system that reflects how your fund actually wins.",
+              cls="mt-6 text-ink-muted text-lg max-w-3xl leading-relaxed"),
+            Div(
+                Button_(t("oss_view_source", lang), href=GITHUB_URL, primary=True),
+                Button_(t("oss_cta_start", lang), href="/signin", primary=False),
+                cls="mt-8 flex items-center gap-3 flex-wrap",
+            ),
+            cls="border-t border-line",
+        ),
+        Section_(
+            Div(
+                *[Article(
+                    Span(f"0{index}", cls="font-mono text-[11px] tracking-widest text-accent"),
+                    Heading(3, title, cls="mt-4"),
+                    P(body, cls="mt-3 text-ink-muted text-sm leading-relaxed"),
+                    cls="p-7 rounded-2xl border border-line bg-bg-elevated h-full",
+                ) for index, (title, body) in enumerate(advantages, start=1)],
+                cls="grid md:grid-cols-2 gap-4",
+            ),
+            cls="border-t border-line",
+        ),
+        Section_(
+            Eyebrow("What free means"),
+            Heading(2, "No licence fee. No per-seat gate. No lock-in.", cls="mt-4 max-w-3xl"),
+            P("The FastVC software is free under Apache 2.0. Infrastructure, commercial model "
+              "APIs and paid data providers can still have their own costs, but you choose each "
+              "one and can replace it without rebuilding the venture workflow.",
+              cls="mt-5 text-ink-muted text-lg max-w-3xl leading-relaxed"),
+            cls="border-t border-line bg-accent/5",
+        ),
+        CTASection(lang=lang),
+        current_path="/open-source",
         lang=lang,
     )
 

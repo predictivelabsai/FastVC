@@ -84,6 +84,10 @@ financials or EBITDA.
 # Explicit destructive cutover from synthetic to registry-backed companies
 .venv/bin/python -m scripts.ingest_companies registry --limit 500 --replace
 
+# Additively merge the complete PEHero/LiquidRound LT/EE/LV cache
+.venv/bin/python -m scripts.ingest_companies registry-backfill --dry-run
+.venv/bin/python -m scripts.ingest_companies registry-backfill
+
 # Free/capped provider comparisons (1–25 records)
 .venv/bin/python -m scripts.ingest_companies pilot --provider companies_house --limit 5
 .venv/bin/python -m scripts.ingest_companies pilot --provider prh --limit 5

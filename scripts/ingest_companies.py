@@ -16,7 +16,8 @@ from ingestion.pilots import run_quality_pilot
 from ingestion.backfill import run_backfill
 from ingestion.public_directories import scrape_public_directory
 from ingestion.service import (
-    load_registry_candidates, replace_company_universe, select_registry_cohort, source_status,
+    load_registry_candidates, load_registry_universe, replace_company_universe,
+    select_registry_cohort, source_status, upsert_registry_universe,
 )
 
 
@@ -33,6 +34,12 @@ def main() -> None:
     registry.add_argument("--limit", type=int, default=500)
     registry.add_argument("--dry-run", action="store_true")
     registry.add_argument("--replace", action="store_true")
+
+    registry_backfill = commands.add_parser(
+        "registry-backfill", help="additively upsert the complete LT/EE/LV registry cache"
+    )
+    registry_backfill.add_argument("--registry-dir")
+    registry_backfill.add_argument("--dry-run", action="store_true")
 
     pilot = commands.add_parser("pilot", help="run a small provider quality comparison")
     pilot.add_argument("--provider", required=True,
@@ -61,6 +68,9 @@ def main() -> None:
         candidates = load_registry_candidates(args.registry_dir)
         cohort = select_registry_cohort(candidates, limit=args.limit)
         _print(replace_company_universe(cohort, dry_run=args.dry_run))
+    elif args.command == "registry-backfill":
+        companies = load_registry_universe(args.registry_dir)
+        _print(upsert_registry_universe(companies, dry_run=args.dry_run))
     elif args.command == "pilot":
         _print(run_quality_pilot(args.provider, limit=args.limit, persist=not args.no_persist))
     elif args.command == "backfill":

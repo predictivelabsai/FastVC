@@ -103,7 +103,7 @@ docker compose up --build                        # local bring-up
 ### Routes (one FastHTML `app.py` mounts everything)
 
 - `/healthz` → container + reverse-proxy health JSON. Defined directly in `app.py`.
-- `/` + `/platform` + `/agents` + `/agents/<slug>` + `/how-it-works` + `/features` + `/compare` + `/contact` (GET+POST) + `/set-lang/<code>` → `landing/routes.py`. `/pricing` is retired and 301s to `/features`; `FEATURE_GROUPS`, `INTEGRATION_GROUPS`, `COMPARE_ROWS` and `GAP_ROWS` are plain module-level data at the top of those routes — edit copy there, not in the markup.
+- `/` + `/platform` + `/agents` + `/agents/<slug>` + `/how-it-works` + `/features` + `/open-source` + `/compare` + `/contact` (GET+POST) + `/set-lang/<code>` → `landing/routes.py`. `/pricing` is retired and 301s to `/features`; `FEATURE_GROUPS`, `INTEGRATION_GROUPS`, `COMPARE_ROWS` and `GAP_ROWS` are plain module-level data at the top of those routes — edit copy there, not in the markup.
 - `/app` → 3-pane chat product. SSE streaming at `POST /app/chat`. `/app/news` + `/app/news/html` serve the RSS panel. `chat/routes.py`.
 - `/app/discovery` + `POST /app/discovery/save` + `POST /app/discovery/<id>/delete` + `/app/signals` + `/app/founders` + `/app/market-map` → thesis-led startup discovery, saved searches, startup signals, founder browser, market map. `chat/discovery.py`.
 - `/app/pipeline` + `/app/pipeline/<slug>` → kanban board + per-deal workspace (chat + brief on right). `chat/pipeline.py`.

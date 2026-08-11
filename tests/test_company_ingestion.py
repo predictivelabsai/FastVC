@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ingestion.models import NormalizedCompany
 from ingestion.normalize import clean_website, normalize_registry_record, slugify
-from ingestion.service import select_registry_cohort
+from ingestion.service import load_registry_universe, select_registry_cohort
 from ingestion.backfill import normalize_provider_record
 from ingestion.providers import PappersClient
 
@@ -89,3 +89,24 @@ def test_pappers_cursor_search_uses_cursor_parameters(monkeypatch):
         "api_token": "test-key", "q": "logiciel", "curseur": "*", "par_curseur": 100,
     }
     assert response.credits_used == 0.1
+
+
+def test_full_registry_loader_deduplicates_without_revenue_filter(tmp_path):
+    for country in ("lt", "ee", "lv"):
+        rows = [{"name": f"{country.upper()} Company", "reg_code": "123"}]
+        if country == "lt":
+            rows.append({
+                "name": "LT Company", "reg_code": "123", "website": "example.lt",
+                "financials": [{"year": 2024, "sales_revenue": 100}],
+            })
+        (tmp_path / f"{country}_companies.json").write_text(
+            __import__("json").dumps(rows), encoding="utf-8"
+        )
+
+    companies = load_registry_universe(tmp_path)
+
+    assert len(companies) == 3
+    assert {company.country for company in companies} == {"LT", "EE", "LV"}
+    lt_company = next(company for company in companies if company.country == "LT")
+    assert lt_company.website == "https://example.lt"
+    assert lt_company.revenue == 100

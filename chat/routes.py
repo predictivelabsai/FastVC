@@ -440,13 +440,25 @@ async def news_feed_html(request: Request):
     from starlette.responses import HTMLResponse
     from fasthtml.common import to_xml
     lang = get_lang(request.session)
-    from utils.news import fetch_news_translated
+    from utils.news import available_sources, fetch_news_translated
     from utils.news_preferences import get_news_source_ids
     from utils.i18n import t
-    articles = await fetch_news_translated(lang, get_news_source_ids(get_user_id(request.session)))
+    selected_ids = get_news_source_ids(get_user_id(request.session))
+    articles = await fetch_news_translated(lang, selected_ids)
+    sources_by_id = {source["id"]: source for source in available_sources()}
+    source_strip = Div(
+        Span("Selected sources", cls="news-selected-label"),
+        Div(*[
+            Span(sources_by_id[source_id]["name"], cls="news-selected-source")
+            for source_id in selected_ids if source_id in sources_by_id
+        ], cls="news-selected-list"),
+        cls="news-selected-sources",
+    )
 
     if not articles:
-        return HTMLResponse(to_xml(P(t("news_empty", lang), cls="news-empty")))
+        return HTMLResponse(to_xml(Div(
+            source_strip, P(t("news_empty", lang), cls="news-empty"),
+        )))
 
     items = []
     for a in articles:
@@ -467,7 +479,7 @@ async def news_feed_html(request: Request):
             rel="noopener",
             cls="news-item",
         ))
-    return HTMLResponse(to_xml(Div(*items)))
+    return HTMLResponse(to_xml(Div(source_strip, *items)))
 
 
 # ── Copilot session ───────────────────────────────────────────────

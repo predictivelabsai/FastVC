@@ -328,6 +328,19 @@ details.agent-group[open] .agent-list { display: flex; flex-direction: column; g
 
 /* News feed items */
 .news-body { display: flex; flex-direction: column; gap: .1rem; }
+.news-selected-sources {
+    margin: 0 .4rem .55rem; padding: .6rem .45rem .55rem;
+    border-bottom: 1px solid var(--line);
+}
+.news-selected-label {
+    display: block; margin: 0 0 .35rem .1rem; color: var(--ink-dim);
+    font-size: .58rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+}
+.news-selected-list { display: flex; flex-wrap: wrap; gap: .25rem; }
+.news-selected-source {
+    color: var(--accent); background: var(--accent-dim); border-radius: .25rem;
+    padding: .15rem .35rem; font-size: .58rem; font-weight: 650; line-height: 1.25;
+}
 .news-item {
     display: block; padding: .7rem .75rem; border-radius: .5rem;
     text-decoration: none; color: var(--ink); transition: background .15s;

@@ -2,7 +2,7 @@ from agents.router import route_intent
 from chat.suggestions import agent_prompt_map, welcome_suggestions
 from utils.news import (
     DEFAULT_SOURCE_IDS, _is_relevant, _limit_with_source_coverage,
-    available_sources, normalise_source_ids,
+    _parse_html_fallback, available_sources, normalise_source_ids,
 )
 from utils.news_preferences import _saved_selection_or_defaults
 
@@ -51,6 +51,23 @@ def test_news_limit_reserves_a_slot_for_every_selected_source():
     limited = _limit_with_source_coverage(articles, ("fast", "slow"), limit=3)
     assert len(limited) == 3
     assert {article["source_id"] for article in limited} == {"fast", "slow"}
+
+
+def test_official_news_page_fallback_parses_and_deduplicates_cards():
+    source = {
+        "id": "invest_europe", "name": "Invest Europe",
+        "category": "European private capital", "icon": "IE",
+    }
+    card = '''
+      <a href="/news/newsroom/european-private-capital/"
+         class="m-listing-item-module m-news-opinion-module">
+        <h4>European private capital &amp; venture news</h4><h6>23 Jul 2026</h6>
+      </a>
+    '''
+    articles = _parse_html_fallback(source, card + card)
+    assert len(articles) == 1
+    assert articles[0]["title"] == "European private capital & venture news"
+    assert articles[0]["published"].startswith("2026-07-23")
 
 
 def test_bloomberg_filter_admits_private_markets_not_macro_politics():

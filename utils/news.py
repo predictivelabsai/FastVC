@@ -31,7 +31,7 @@ NEWS_SOURCES: tuple[dict, ...] = (
     {"id": "startus_magazine", "name": "StartUs Magazine", "url": "https://magazine.startus.cc/feed/", "homepage": "https://magazine.startus.cc/", "category": "European startup news", "description": "European startup, innovation and technology intelligence.", "icon": "SU", "default": True},
     {"id": "peak_capital", "name": "Peak Capital", "url": "https://peak.capital/feed/", "homepage": "https://peak.capital/", "category": "European VC thinking", "description": "Early-stage European VC perspectives, investments and founder advice.", "icon": "PK", "default": True},
     {"id": "deutsche_startups", "name": "Deutsche Startups", "url": "https://www.deutsche-startups.de/feed/", "homepage": "https://www.deutsche-startups.de/", "category": "European startup news", "description": "German-language coverage of DACH startups, funding and exits.", "icon": "DS", "default": True},
-    {"id": "invest_europe", "name": "Invest Europe", "url": "https://www.investeurope.eu/rss/", "homepage": "https://www.investeurope.eu/news/", "category": "European private capital", "description": "European venture-capital and private-equity industry news and analysis.", "icon": "IE", "default": True},
+    {"id": "invest_europe", "name": "Invest Europe", "url": "https://www.investeurope.eu/rss/", "fallback_html": "https://www.investeurope.eu/news/", "homepage": "https://www.investeurope.eu/news/", "category": "European private capital", "description": "European venture-capital and private-equity industry news and analysis.", "icon": "IE", "default": True},
 
     # Additional focused sources remain available as optional user choices.
     {"id": "techcrunch_startups", "name": "TechCrunch Startups", "url": "https://techcrunch.com/category/startups/feed/", "homepage": "https://techcrunch.com/category/startups/", "category": "Additional startup news", "description": "Global funding, founders and startup operating news.", "icon": "TC", "default": False},
@@ -67,7 +67,7 @@ _cache: dict = {"source_articles": {}, "source_fetched_at": {}}
 def available_sources() -> list[dict]:
     """Return public catalogue metadata without internal filtering details."""
     return [
-        {key: value for key, value in source.items() if key not in {"strict"}}
+        {key: value for key, value in source.items() if key not in {"strict", "fallback_html"}}
         for source in NEWS_SOURCES
     ]
 
@@ -126,6 +126,56 @@ def _is_relevant(source: dict, title: str, summary: str) -> bool:
     return bool(_PRIVATE_MARKETS_RE.search(f"{title} {plain_summary}"))
 
 
+def _parse_html_fallback(source: dict, page_html: str) -> list[dict]:
+    """Parse Invest Europe-style news cards when an official RSS response is empty."""
+    articles: list[dict] = []
+    seen_urls: set[str] = set()
+    cards = re.findall(
+        r'<a href="(/news/(?:newsroom|opinion)/[^"]+/)"[^>]*'
+        r'class="[^"]*m-news-opinion-module[^"]*"[^>]*>(.*?)</a>',
+        page_html, re.IGNORECASE | re.DOTALL,
+    )
+    for path, body in cards:
+        url = f"https://www.investeurope.eu{path}"
+        if url in seen_urls:
+            continue
+        title_match = re.search(r"<h[34]>(.*?)</h[34]>", body, re.IGNORECASE | re.DOTALL)
+        if not title_match:
+            continue
+        title = unescape(re.sub(r"<[^>]+>", " ", title_match.group(1)))
+        title = re.sub(r"\s+", " ", title).strip()
+        date_match = re.search(r"<h6>(.*?)</h6>", body, re.IGNORECASE | re.DOTALL)
+        try:
+            published = datetime.strptime(
+                re.sub(r"<[^>]+>", "", date_match.group(1)).strip(), "%d %b %Y",
+            ).replace(tzinfo=timezone.utc)
+        except (AttributeError, ValueError):
+            published = datetime.now(tz=timezone.utc)
+        seen_urls.add(url)
+        articles.append({
+            "title": title, "url": url, "summary": "", "source": source["name"],
+            "source_id": source["id"], "category": source["category"],
+            "icon": source["icon"], "published": published.isoformat(), "image": None,
+        })
+    return articles[:20]
+
+
+def _fetch_html_fallback(source: dict) -> list[dict]:
+    fallback_url = source.get("fallback_html")
+    if not fallback_url:
+        return []
+    try:
+        response = httpx.get(
+            fallback_url, follow_redirects=True, timeout=12,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; FastVC/1.0; +https://fastvc.org)"},
+        )
+        response.raise_for_status()
+        return _parse_html_fallback(source, response.text)
+    except Exception as exc:
+        log.warning("News-page fallback failed for %s: %s", source["name"], exc)
+        return []
+
+
 def _fetch_one(source: dict) -> list[dict]:
     parsed = None
     last_error: Exception | None = None
@@ -153,6 +203,9 @@ def _fetch_one(source: dict) -> list[dict]:
             last_error = exc
 
     if parsed is None:
+        fallback_articles = _fetch_html_fallback(source)
+        if fallback_articles:
+            return fallback_articles
         log.warning("RSS fetch failed for %s: %s", source["name"], last_error)
         return []
 

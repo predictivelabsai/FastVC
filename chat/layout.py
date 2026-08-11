@@ -31,6 +31,7 @@ def common_scripts():
 
 def chat_page(*, user_email: str | None, sessions: list, current_sid: str = "",
               messages: list, current_agent_slug: str | None = None,
+              selected_agent_slug: str | None = None,
               current_currency: str = "USD", readonly: bool = False,
               lang: str = "en", prefill: str = ""):
     head = Head(
@@ -65,7 +66,8 @@ def chat_page(*, user_email: str | None, sessions: list, current_sid: str = "",
         Div(id="left-overlay", cls="left-overlay", onclick="toggleLeftPane()"),
         left_pane(user_email=user_email, sessions=sessions, current_sid=current_sid,
                   current_currency=current_currency, lang=lang),
-        center_pane(messages=messages, current_agent_slug=current_agent_slug, readonly=readonly, lang=lang),
+        center_pane(messages=messages, current_agent_slug=current_agent_slug,
+                    selected_agent_slug=selected_agent_slug, readonly=readonly, lang=lang),
         right_pane(lang=lang),
         Script(src=_versioned("chat.js")),
         prefill_script,

@@ -36,7 +36,15 @@ CATEGORIES = [
 
 
 def A(slug, name, category, icon, prefix, one_liner, description, *prompts):
-    return AgentSpec(slug, name, category, icon, one_liner, description, prefix, tuple(prompts))
+    # Command aliases stay available to the router, but public/evaluation examples
+    # are ordinary English and require live FastVC evidence. The richer UI prompts
+    # are generated from current non-synthetic records in chat.suggestions.
+    grounded_prompts = (
+        f"Use verified FastVC records to answer a {name.lower()} question.",
+        "Find a relevant company already in FastVC and explain the available source evidence.",
+        "State which company data is missing instead of inventing facts or metrics.",
+    )
+    return AgentSpec(slug, name, category, icon, one_liner, description, prefix, grounded_prompts)
 
 
 AGENTS = (

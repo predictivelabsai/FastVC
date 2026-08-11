@@ -91,14 +91,19 @@ search_startups = StructuredTool.from_function(
 
 
 class GetStartupArgs(BaseModel):
-    slug_or_id: str = Field(description="Startup slug or numeric company ID.")
+    slug_or_id: str = Field(description="Company slug, exact legal name or numeric company ID.")
 
 
 def _company_id(slug_or_id: str) -> int | None:
     try:
         row = fetch_one("SELECT id FROM fastvc.companies WHERE id=%s", (int(slug_or_id),))
     except (TypeError, ValueError):
-        row = fetch_one("SELECT id FROM fastvc.companies WHERE slug=%s", (slug_or_id,))
+        row = fetch_one(
+            """SELECT id FROM fastvc.companies
+               WHERE slug=%s OR lower(name)=lower(%s)
+               ORDER BY CASE WHEN slug=%s THEN 0 ELSE 1 END,id LIMIT 1""",
+            (slug_or_id, slug_or_id, slug_or_id),
+        )
     return int(row["id"]) if row else None
 
 

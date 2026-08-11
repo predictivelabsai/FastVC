@@ -83,7 +83,7 @@ SAMPLE_QUERIES = [
     "Top 10 companies by LTM revenue, show sector",
     "Company count by deal stage",
     "Average EBITDA margin by sector",
-    "Monthly revenue trend for DR VET",
+    "Annual revenue trend for Snabb, UAB",
     "Company count by city",
     "Revenue distribution by sub-sector",
     "Largest healthcare companies by employees",

@@ -115,16 +115,10 @@ def _render_content(content: str) -> str:
     return "\n".join(out)
 
 
-def welcome_hero(lang: str = "en"):
+def welcome_hero(prompt_map: dict[str, list[str]], lang: str = "en"):
     """Empty-state hero with category chips + example prompts."""
-    prompts = [
-        ("screen: Northwind AI, Series A, $4M ARR, 110% growth", "deal_triage"),
-        ("round: model a $6M Series A at $24M pre-money", "pro_forma_builder"),
-        ("metrics: calculate burn multiple and runway for Meridian Health", "t12_normalizer"),
-        ("memo: draft the Series A IC memo for Northwind AI", "investor_memo"),
-        ("comps: European Series A vertical AI rounds", "comp_finder"),
-        ("discover: Seed and Series A developer tools with strong momentum", "market_scanner"),
-    ]
+    from chat.suggestions import welcome_suggestions
+    prompts = welcome_suggestions(prompt_map)
     return Div(
         Div(
             Span("◆", cls="hero-mark"),
@@ -148,7 +142,6 @@ def welcome_hero(lang: str = "en"):
 
 def agent_browser(lang: str = "en"):
     """Left-pane browser of all 22 agents, grouped by category."""
-    from urllib.parse import quote
     groups = []
     for cat in CATEGORIES:
         agents = AGENTS_BY_CATEGORY.get(cat["key"], [])
@@ -156,9 +149,8 @@ def agent_browser(lang: str = "en"):
             A(
                 Span(a.icon, cls="aitem-icon"),
                 Span(agent_t(a.slug, "name", lang), cls="aitem-name"),
-                Span(a.prefix, cls="aitem-prefix"),
                 cls="agent-item",
-                href=f"/app?prefill={quote(a.prefix + ' ')}",
+                href=f"/app?agent={a.slug}",
                 title=agent_t(a.slug, "one_liner", lang),
             )
             for a in agents
@@ -271,6 +263,13 @@ def _config_section(current_currency: str = "USD", lang: str = "en"):
         ),
         A("Credentials", href="/app/integrations#credentials",
           cls="integration-row integration-link"),
+        A(
+            Span(cls="integration-dot ok"),
+            Span("News sources", cls="integration-name"),
+            Span("RSS", cls="integration-note"),
+            Span("configure", cls="integration-status ok"),
+            href="/app/news-sources", cls="integration-row integration-link",
+        ),
         cls="config-section",
     )
 
@@ -410,26 +409,24 @@ def left_pane(*, user_email: str | None, sessions: list[dict], current_sid: str 
     )
 
 
-def sample_cards(current_agent_slug: str | None = None, lang: str = "en"):
+def sample_cards(current_agent_slug: str | None = None, lang: str = "en",
+                 prompt_map: dict[str, list[str]] | None = None):
     """Gemini-style contextual sample-question cards below the chat input.
 
     Renders the current agent's example_prompts (or a curated 6-pack when no
     agent is bound yet). Client-side, `updateSampleCards(slug)` refreshes the
     list whenever the user types a prefix or the router picks a new agent.
     """
+    if prompt_map is None:
+        from chat.suggestions import agent_prompt_map
+        prompt_map = agent_prompt_map()
     if current_agent_slug and current_agent_slug in AGENTS_BY_SLUG:
         agent = AGENTS_BY_SLUG[current_agent_slug]
-        prompts = list(agent.example_prompts[:6])
+        prompts = prompt_map.get(current_agent_slug, [])[:6]
         label = t("js_try_with", lang) + agent_t(agent.slug, "name", lang)
     else:
-        prompts = [
-            "triage: DR VET veterinary clinic, €4.6M revenue, Vilnius",
-            "lbo: 5-year model for Eika Construction at 12% rev growth",
-            "ltm: what are the financials of DR VET?",
-            "memo: draft the IC memo for Baltic transline",
-            "vdr: audit the data room for Hegelmann transporte",
-            "crm: top 10 LPs to reach out to for Fund V",
-        ]
+        from chat.suggestions import welcome_suggestions
+        prompts = [text for text, _ in welcome_suggestions(prompt_map)]
         label = t("js_try_prompt", lang)
 
     chips = [
@@ -453,17 +450,21 @@ def sample_cards(current_agent_slug: str | None = None, lang: str = "en"):
 
 
 def center_pane(*, messages: list[dict], current_agent_slug: str | None = None,
+                selected_agent_slug: str | None = None,
                 readonly: bool = False, lang: str = "en"):
     has_messages = bool(messages)
     bubbles = [message_bubble(m["role"], m["content"], m.get("agent_slug")) for m in messages]
 
     input_placeholder = t("chat_placeholder", lang)
 
-    # Embed all agents' example_prompts as JSON for the client so we can
+    from chat.suggestions import agent_prompt_map
+    prompt_map = agent_prompt_map()
+
+    # Embed all agents' grounded prompts as JSON for the client so we can
     # refresh sample cards without a round-trip whenever the router picks a
     # different slug.
     import json
-    prompts_lookup = {a.slug: list(a.example_prompts[:6]) for a in AGENTS}
+    prompts_lookup = prompt_map
     names_lookup = {a.slug: agent_t(a.slug, "name", lang) for a in AGENTS}
 
     # Language dropdown for the header — only the active flag is visible
@@ -511,23 +512,25 @@ def center_pane(*, messages: list[dict], current_agent_slug: str | None = None,
             cls="chat-header",
         ),
         Div(*bubbles, id="messages", cls="messages"),
-        welcome_hero(lang=lang) if not has_messages else Div(id="welcome-hero", style="display:none"),
+        welcome_hero(prompt_map, lang=lang) if not has_messages else Div(id="welcome-hero", style="display:none"),
         *([] if readonly else [
             Form(
+                Input(type="hidden", id="selected-agent", name="agent",
+                      value=selected_agent_slug or ""),
                 Textarea(
                     id="chat-input", name="msg",
                     cls="chat-textarea",
                     placeholder=input_placeholder,
                     rows="2",
                     onkeydown="handleKey(event)",
-                    oninput="autoResize(this); onInputChange(this)",
+                    oninput="autoResize(this)",
                 ),
                 Button(t("chat_send", lang), type="submit", cls="chat-send", id="send-btn"),
                 id="chat-form",
                 cls="chat-form",
                 onsubmit="sendMessage(event)",
             ),
-            sample_cards(current_agent_slug, lang=lang),
+            sample_cards(current_agent_slug, lang=lang, prompt_map=prompt_map),
         ]),
         # JSON blobs the client reads
         NotStr(f'<script id="agent-prompts-data" type="application/json">{json.dumps(prompts_lookup)}</script>'),
@@ -659,7 +662,8 @@ def copilot_pane(*, page_name: str, page_context: dict | None = None,
     import json as _json
     context_json = _json.dumps(page_context or {})
 
-    prompts = COPILOT_PROMPTS.get(page_name, COPILOT_PROMPTS.get("Pipeline", []))
+    from chat.suggestions import copilot_suggestions
+    prompts = copilot_suggestions(page_name)
     sample_chips = [
         Button(
             Span(p, cls="copilot-chip-text"),

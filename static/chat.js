@@ -29,6 +29,7 @@
         currentSessionId = sid;
         const u = new URL(window.location);
         u.searchParams.set("sid", sid);
+        u.searchParams.delete("agent");
         history.replaceState(null, "", u);
     }
 
@@ -246,12 +247,12 @@
         let prompts = (slug && AGENT_PROMPTS[slug]) || [];
         if (!prompts.length) {
             prompts = [
-                "triage: DR VET veterinary clinic, €3.8M revenue, Vilnius",
-                "lbo: 5-year model for Kardiolita at 12% rev growth",
-                "ltm: what are the financials of DR VET?",
-                "memo: draft the IC memo for Kardiolita",
-                "vdr: audit the data room for Northway",
-                "crm: top 10 LPs to reach out to for Fund V",
+                "Find companies with recent registry financials.",
+                "Compare two companies using the data already loaded.",
+                "Show which company records have the strongest source coverage.",
+                "Review annual revenue and profit trends.",
+                "Identify missing diligence data for a selected company.",
+                "Explain the provenance of a company record.",
             ];
         }
         row.innerHTML = "";
@@ -268,19 +269,6 @@
             label.innerHTML = slug && AGENT_NAMES[slug]
                 ? `<span class="sample-cards-label">${I18N.try_with || "Try with "}${AGENT_NAMES[slug]}</span>`
                 : `<span class="sample-cards-label">${I18N.try_prompt || "Try a prompt"}</span>`;
-        }
-    };
-
-    // Update sample cards when the user types a prefix like "lbo:"
-    window.onInputChange = (ta) => {
-        const v = (ta.value || "").trim().toLowerCase();
-        const m = v.match(/^(\w{2,10}):/);
-        if (!m) return;
-        const prefix = m[1] + ":";
-        // find slug with this prefix
-        for (const slug of Object.keys(AGENT_PROMPTS)) {
-            const first = (AGENT_PROMPTS[slug][0] || "").toLowerCase();
-            if (first.startsWith(prefix)) { updateSampleCards(slug); return; }
         }
     };
 
@@ -463,7 +451,12 @@
         ta.value = "";
         ta.style.height = "";
 
-        const body = new URLSearchParams({ msg, sid: currentSessionId || "" });
+        const form = $("#chat-form");
+        const body = new URLSearchParams(form ? new FormData(form) : undefined);
+        body.set("msg", msg);
+        body.set("sid", currentSessionId || "");
+        const selectedAgent = $("#selected-agent");
+        if (selectedAgent) selectedAgent.value = "";
 
         const resp = await fetch("/app/chat", { method: "POST", body });
         if (!resp.ok) {
@@ -581,7 +574,6 @@
         ta.value = text;
         ta.focus();
         autoResize(ta);
-        onInputChange(ta);
     };
     window.showSignIn = () => { document.getElementById('signin-overlay').classList.add('visible'); switchAuthTab('login'); };
     window.toggleLangDropdown = (ev) => {

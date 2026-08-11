@@ -112,11 +112,11 @@ def _persist_message(session_id: int, role: str, content: str,
 # ── GET /app ─────────────────────────────────────────────────────────
 
 @rt("/app")
-def app_home(sess, sid: str = "", prefill: str = ""):
+def app_home(sess, sid: str = "", prefill: str = "", agent: str = ""):
     uid, email = _ensure_user(sess)
     sessions = _list_sessions(uid) if uid else []
     messages: list[dict] = []
-    current_agent = None
+    current_agent = agent if agent in AGENTS_BY_SLUG else None
     if uid and sid:
         try:
             sid_int = int(sid)
@@ -134,6 +134,7 @@ def app_home(sess, sid: str = "", prefill: str = ""):
         current_sid=str(sid) if sid else "",
         messages=messages,
         current_agent_slug=current_agent,
+        selected_agent_slug=agent if agent in AGENTS_BY_SLUG else None,
         current_currency=get_currency(sess),
         lang=get_lang(sess),
         prefill=prefill,
@@ -149,6 +150,8 @@ async def chat_stream(request: Request):
     user_msg = (form.get("msg") or "").strip()
     sid_str = form.get("sid") or ""
     context_raw = (form.get("context") or "").strip()
+    forced_agent = (form.get("agent") or "").strip()
+    company_slug = (form.get("company") or "").strip()
 
     if not user_msg:
         return JSONResponse({"error": "empty message"}, status_code=400)
@@ -168,20 +171,21 @@ async def chat_stream(request: Request):
 
     session_id = _ensure_session(uid, sid_str, first_message=user_msg)
 
-    # If the message is purely about switching language, stay on the current agent
+    # Route ordinary language through the intent wrapper. Legacy command prefixes
+    # remain accepted for backwards compatibility but are not exposed by the UI.
     from agents.router import is_language_intent
     if is_language_intent(user_msg):
         row = fetch_one("SELECT agent_slug FROM fastvc.chat_sessions WHERE id = %s", (session_id,))
-        agent_slug = (row.get("agent_slug") if row else None) or agent_router.route(user_msg)
-    else:
-        agent_slug = agent_router.route(user_msg)
+        forced_agent = (row.get("agent_slug") if row else None) or forced_agent
+    decision = agent_router.route_intent(user_msg, forced_agent, company_slug)
+    agent_slug = decision.agent_slug
     spec = by_slug(agent_slug)
 
     # Persist the user message upfront
     _persist_message(session_id, "user", user_msg)
 
     history = _session_messages(session_id)[:-1]  # exclude the one we just inserted
-    stripped_msg = agent_router.strip_prefix(user_msg)
+    routed_msg = decision.message
 
     # Prepend a short currency directive so any specialist defaults to the
     # user's preferred currency when formatting figures. Does not affect the
@@ -205,6 +209,19 @@ async def chat_stream(request: Request):
         f"{currency} unless the user explicitly overrides in this turn."
         f"{lang_directive}"
     )
+    grounding_directive = (
+        "[Grounding policy] Treat FastVC tools and database records as the source of truth. "
+        "Never invent a company, founder, metric, financing round or sample fact. For a named "
+        "company, search the loaded company universe and retrieve its dossier before concluding "
+        "that data is unavailable. Distinguish annual registry filings from monthly startup KPIs: "
+        "do not calculate ARR, burn multiple, retention or runway unless the required source fields "
+        "exist. State data gaps plainly and cite source/provenance fields returned by tools."
+    )
+    if decision.company_slug:
+        grounding_directive += (
+            f" The selected real FastVC company has slug {decision.company_slug!r}; "
+            "retrieve it before answering company-specific questions."
+        )
 
     async def event_stream():
         yield sse.event("session", {"sid": session_id})
@@ -215,7 +232,8 @@ async def chat_stream(request: Request):
         })
 
         # Build LangChain messages
-        lc_messages = [SystemMessage(content=currency_directive)]
+        lc_messages = [SystemMessage(content=currency_directive),
+                       SystemMessage(content=grounding_directive)]
         if context_raw:
             lc_messages.append(SystemMessage(content=f"[Page context] {context_raw}"))
         for h in history[-20:]:
@@ -223,7 +241,7 @@ async def chat_stream(request: Request):
                 lc_messages.append(HumanMessage(content=h["content"]))
             elif h["role"] == "assistant":
                 lc_messages.append(AIMessage(content=h["content"]))
-        lc_messages.append(HumanMessage(content=stripped_msg))
+        lc_messages.append(HumanMessage(content=routed_msg))
 
         accumulated = []
         tool_calls_log = []
@@ -390,7 +408,8 @@ def shared_chat(token: str):
 async def news_feed(request: Request):
     lang = get_lang(request.session)
     from utils.news import fetch_news_translated, _cache_ttl
-    articles = await fetch_news_translated(lang)
+    from utils.news_preferences import get_news_source_ids
+    articles = await fetch_news_translated(lang, get_news_source_ids(get_user_id(request.session)))
     return JSONResponse({
         "articles": articles,
         "interval": _cache_ttl(),
@@ -418,13 +437,13 @@ def _time_ago(iso_str: str) -> str:
 @rt("/app/news/html")
 async def news_feed_html(request: Request):
     """HTMX endpoint — returns rendered HTML fragment for news items."""
-    import html as _html
     from starlette.responses import HTMLResponse
     from fasthtml.common import to_xml
     lang = get_lang(request.session)
     from utils.news import fetch_news_translated
+    from utils.news_preferences import get_news_source_ids
     from utils.i18n import t
-    articles = await fetch_news_translated(lang)
+    articles = await fetch_news_translated(lang, get_news_source_ids(get_user_id(request.session)))
 
     if not articles:
         return HTMLResponse(to_xml(P(t("news_empty", lang), cls="news-empty")))
@@ -432,7 +451,7 @@ async def news_feed_html(request: Request):
     items = []
     for a in articles:
         summary_el = Div(
-            _html.escape((a.get("summary") or "")[:120]),
+            (a.get("summary") or "")[:120],
             cls="news-item-summary",
         ) if a.get("summary") else None
         items.append(A(
@@ -441,7 +460,7 @@ async def news_feed_html(request: Request):
                 Span(_time_ago(a.get("published", "")), cls="news-time"),
                 cls="news-item-header",
             ),
-            Div(_html.escape(a["title"]), cls="news-item-title"),
+            Div(a["title"], cls="news-item-title"),
             summary_el,
             href=a["url"],
             target="_blank",

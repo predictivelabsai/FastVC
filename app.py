@@ -41,6 +41,7 @@ from chat import help as _help_routes  # noqa: E402,F401
 from chat import valuation as _valuation_routes  # noqa: E402,F401
 from chat import webhooks as _webhook_routes  # noqa: E402,F401
 from chat import integrations as _integrations_routes  # noqa: E402,F401
+from chat import news_sources as _news_sources_routes  # noqa: E402,F401
 from chat import training as _training_routes  # noqa: E402,F401
 from chat import investors as _investors_routes  # noqa: E402,F401
 from chat import portfolio as _portfolio_routes  # noqa: E402,F401

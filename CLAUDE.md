@@ -242,7 +242,7 @@ for p in direct: expand(p)
 
 # Map top-level import name → distribution name(s) on this machine.
 dists = {k: [norm(d) for d in v] for k, v in packages_distributions().items()}
-INTERNAL = {'agents','app','auth','chat','config','db','evals','game','landing','prompts','rag','scripts','sql','static','synthetic','tests','tools','utils'}
+INTERNAL = {'agents','app','auth','chat','config','db','evals','game','ingestion','landing','prompts','rag','scripts','sql','static','synthetic','tests','tools','utils'}
 stdlib = set(sys.stdlib_module_names)
 missing = set()
 for p in ROOT.rglob('*.py'):
@@ -267,7 +267,7 @@ pytest -q tests/test_agents_smoke.py
 
 # 3. Offline boot check — every route module that app.py imports at
 #    startup must import cleanly with only what's installed.
-.venv/bin/python -c "from app import app; from chat import routes, pipeline, instructions, analytics, companies, memo_pdf, exports, dataroom, help, valuation, webhooks, integrations, training, investors, portfolio, discovery; from auth import routes as _auth; print('app imports OK')"
+.venv/bin/python -c "from app import app; from chat import routes, pipeline, instructions, analytics, companies, memo_pdf, exports, dataroom, help, valuation, webhooks, integrations, news_sources, training, investors, portfolio, discovery; from auth import routes as _auth; print('app imports OK')"
 ```
 
 Only push once all three pass. If you added a new dependency, pin it with a lower bound (`pkg>=X.Y.0`) in `requirements.txt` in the same commit that introduces the import.

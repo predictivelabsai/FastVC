@@ -94,6 +94,8 @@ def migrate(drop: bool = False) -> None:
     _apply("""
         ALTER TABLE fastvc.user_preferences
             ADD COLUMN IF NOT EXISTS unsubscribe_token VARCHAR(64) UNIQUE;
+        ALTER TABLE fastvc.user_preferences
+            ADD COLUMN IF NOT EXISTS news_source_ids JSONB DEFAULT '[]'::jsonb;
     """)
 
     _apply("""

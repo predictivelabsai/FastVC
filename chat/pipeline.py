@@ -433,10 +433,13 @@ def deal_detail(sess, slug: str):
     </div>
     """
 
+    from chat.suggestions import agent_prompt_map
+    grounded_prompts = agent_prompt_map((co,))
+
     # center chat bubbles if any
     bubbles = [message_bubble(m["role"], m["content"], m.get("agent_slug")) for m in messages]
 
-    hidden_slug = Input(type="hidden", id="deal-slug", value=slug)
+    hidden_slug = Input(type="hidden", id="deal-slug", name="company", value=slug)
 
     body = Body(
         signin_overlay(),
@@ -485,7 +488,7 @@ def deal_detail(sess, slug: str):
                 cls="chat-form",
                 onsubmit="sendMessage(event)",
             ),
-            sample_cards(),
+            sample_cards(prompt_map=grounded_prompts),
             cls="center-pane",
         ),
         # Right pane pre-filled with deal brief
@@ -505,7 +508,7 @@ def deal_detail(sess, slug: str):
             id="right-pane", cls="right-pane open",
         ),
         # Prompts data for sample cards
-        NotStr(f'<script id="agent-prompts-data" type="application/json">{json.dumps({a.slug: list(a.example_prompts[:6]) for a in AGENTS})}</script>'),
+        NotStr(f'<script id="agent-prompts-data" type="application/json">{json.dumps(grounded_prompts)}</script>'),
         NotStr(f'<script id="agent-names-data" type="application/json">{json.dumps({a.slug: a.name for a in AGENTS})}</script>'),
         Script(src=_versioned("chat.js")),
         cls="bg-bg text-ink font-sans antialiased app",

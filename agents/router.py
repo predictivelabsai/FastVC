@@ -1,4 +1,4 @@
-"""Intent router — maps a user message to an agent slug.
+"""Intent-router wrapper — maps ordinary user language to a specialist.
 
 Order of preference:
   1. Explicit prefix (`triage:`, `memo:`, etc.) — from AgentSpec.prefix
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 
 from agents.registry import AGENTS, AGENTS_BY_SLUG
 from utils.llm import build_llm
@@ -75,6 +76,16 @@ CATEGORY_HINTS: dict[str, list[str]] = {
 
 
 _PREFIX_MAP: dict[str, str] = {a.prefix.lower(): a.slug for a in AGENTS}
+
+
+@dataclass(frozen=True)
+class IntentRoute:
+    """Routing envelope passed from the conversational wrapper to a specialist."""
+
+    agent_slug: str
+    message: str
+    intent_source: str
+    company_slug: str | None = None
 
 
 def _prefix_match(message: str) -> str | None:
@@ -169,6 +180,25 @@ def route(message: str, forced_slug: str | None = None) -> str:
         return max(scores, key=scores.get)
 
     return _llm_classify(message)
+
+
+def route_intent(
+    message: str, forced_slug: str | None = None, company_slug: str | None = None,
+) -> IntentRoute:
+    """Wrap specialist routing so the UI never needs to expose command prefixes."""
+    explicit_prefix = _prefix_match(message)
+    if forced_slug and forced_slug in AGENTS_BY_SLUG:
+        slug, source = forced_slug, "selected_agent"
+    elif explicit_prefix:
+        slug, source = explicit_prefix, "legacy_shortcut"
+    else:
+        slug, source = route(message), "intent_router"
+    return IntentRoute(
+        agent_slug=slug,
+        message=strip_prefix(message),
+        intent_source=source,
+        company_slug=company_slug or None,
+    )
 
 
 def strip_prefix(message: str) -> str:

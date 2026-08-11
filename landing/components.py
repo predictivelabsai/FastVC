@@ -306,6 +306,19 @@ def Hero(lang: str = "en"):
 
 def ProductTour(lang: str = "en"):
     """Validated animated walkthrough plus a code-native product summary."""
+    from chat.suggestions import real_company_examples
+    examples = real_company_examples()
+    company = examples[0] if examples else {}
+    company_name = company.get("name") or "A company in FastVC"
+    currency = company.get("currency") or "EUR"
+    symbols = {"EUR": "€", "USD": "$", "GBP": "£"}
+    latest_revenue = company.get("latest_revenue")
+    revenue_text = (
+        f"{symbols.get(currency, currency + ' ')}{float(latest_revenue):,.0f} filed revenue"
+        if latest_revenue is not None else "Verified registry financials"
+    )
+    period_text = str(company.get("latest_period") or "latest filing")[:10]
+    periods = company.get("financial_periods")
     return Section(
         Div(
             Div(
@@ -331,34 +344,35 @@ def ProductTour(lang: str = "en"):
             Div(
                 Div(
                     Eyebrow("Discover"),
-                    H3("Vertical AI · Series A", cls="mt-4 text-xl font-medium"),
-                    P("14 thesis matches", cls="mt-2 text-ink-muted text-sm"),
+                    H3("Registry-backed universe", cls="mt-4 text-xl font-medium"),
+                    P("Real company records with source provenance", cls="mt-2 text-ink-muted text-sm"),
                     Div(
-                        Span("Founder move", cls="px-2 py-1 rounded-full bg-accent-dim text-accent-deep text-xs"),
-                        Span("Momentum 87", cls="px-2 py-1 rounded-full bg-bg-raised text-ink-muted text-xs"),
+                        Span("🇬🇧 🇫🇷 🇫🇮 🇪🇪 🇱🇹 🇱🇻", cls="px-2 py-1 rounded-full bg-accent-dim text-accent-deep text-xs"),
+                        Span("APIs + registries", cls="px-2 py-1 rounded-full bg-bg-raised text-ink-muted text-xs"),
                         cls="mt-5 flex flex-wrap gap-2",
                     ),
                     cls="p-6 md:p-8 bg-bg-elevated",
                 ),
                 Div(
                     Eyebrow("Screen"),
-                    H3("Northwind AI", cls="mt-4 text-xl font-medium"),
+                    H3(company_name, cls="mt-4 text-xl font-medium"),
                     Div(
-                        P("$4.8M ARR", cls="text-2xl font-medium"),
-                        P("118% growth · 17 mo runway", cls="mt-2 text-ink-muted text-sm"),
+                        P(revenue_text, cls="text-2xl font-medium"),
+                        P(f"{period_text} · {periods or 'available'} annual periods",
+                          cls="mt-2 text-ink-muted text-sm"),
                         cls="mt-5",
                     ),
-                    P("DEEPEN · verify NRR and model-cost sensitivity",
+                    P("SOURCE VERIFIED · registry filing, not an invented KPI",
                       cls="mt-5 font-mono text-xs text-accent-deep"),
                     cls="p-6 md:p-8 bg-bg-elevated border-t md:border-t-0 md:border-l border-line",
                 ),
                 Div(
                     Eyebrow("Model"),
-                    H3("$8M Series A", cls="mt-4 text-xl font-medium"),
+                    H3("Model from evidence", cls="mt-4 text-xl font-medium"),
                     Div(
-                        P("$32M pre · $40M post", cls="text-sm text-ink-muted"),
-                        P("12.5% ownership", cls="mt-2 text-2xl font-medium text-accent"),
-                        P("Option pool and future dilution visible", cls="mt-2 text-ink-muted text-sm"),
+                        P("Use verified inputs and mark missing fields", cls="text-sm text-ink-muted"),
+                        P("Evidence-backed inputs", cls="mt-2 text-2xl font-medium text-accent"),
+                        P("Ownership, option pool and dilution stay auditable", cls="mt-2 text-ink-muted text-sm"),
                         cls="mt-5",
                     ),
                     cls="p-6 md:p-8 bg-bg-elevated border-t md:border-t-0 md:border-l border-line",
@@ -418,7 +432,6 @@ def AgentCard(agent, *, as_link: bool = True, lang: str = "en"):
     inner = Article(
         Div(
             Span(agent.icon, cls="text-accent text-xl"),
-            Span(agent.prefix, cls="ml-auto font-mono text-[11px] tracking-widest uppercase text-ink-dim"),
             cls="flex items-center mb-4",
         ),
         H4(agent_t(agent.slug, "name", lang), cls="text-ink font-medium mb-1.5"),
@@ -473,7 +486,7 @@ def CaseStudyStrip(lang: str = "en"):
 
 
 def PENewsSection(lang: str = "en"):
-    """VC industry news from RSS feeds — rendered server-side from cache."""
+    """Latest startup, venture and private-market news from curated RSS feeds."""
     from utils.news import fetch_news
     import asyncio
 
@@ -482,8 +495,7 @@ def PENewsSection(lang: str = "en"):
     except RuntimeError:
         articles = asyncio.run(fetch_news())
 
-    pe_sources = {"PEH", "BUY", "PEI"}
-    pe_articles = [a for a in articles if a.get("icon") in pe_sources][:8]
+    pe_articles = articles[:8]
 
     if not pe_articles:
         return Div()

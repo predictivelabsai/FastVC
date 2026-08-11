@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fasthtml.common import (
-    Div, H1, H2, H3, H4, P, Ul, Li, Section, Article, Span, A, Form, Input, Textarea, Label, Button, NotStr,
+    Div, H1, H2, H3, H4, P, Ul, Li, Section, Article, Span, A, Img, Form, Input, Textarea, Label, Button, NotStr,
     Table, Thead, Tbody, Tr, Th, Td,
 )
 
@@ -265,6 +265,8 @@ def agent_detail(slug: str, sess):
         )
     cat = next(c for c in CATEGORIES if c["key"] == agent.category)
     agent_name = agent_t(slug, "name", lang)
+    from chat.suggestions import agent_prompt_map
+    public_prompts = agent_prompt_map().get(slug, [])
     return page(
         agent_name,
         Section_(
@@ -279,8 +281,8 @@ def agent_detail(slug: str, sess):
             ),
             Heading(1, agent_name, cls="max-w-4xl"),
             P(agent_t(slug, "one_liner", lang), cls="mt-5 text-ink-muted text-lg max-w-3xl"),
-            Div(Pill(f"prefix: {agent.prefix}"),
-                Pill(f"category: {cat['key']}"),
+            Div(Pill(f"category: {cat['key']}"),
+                Pill("plain-English routing"),
                 cls="mt-6 flex flex-wrap gap-2"),
             cls="border-t border-line",
         ),
@@ -297,7 +299,7 @@ def agent_detail(slug: str, sess):
                         *[Li(
                             Div(f'"{p}"', cls="px-4 py-3 rounded-xl bg-bg-elevated border border-line text-sm text-ink leading-relaxed"),
                             cls="mb-2",
-                        ) for p in agent.example_prompts],
+                        ) for p in public_prompts],
                         cls="mt-4 space-y-2",
                     ),
                     cls="",
@@ -378,7 +380,7 @@ FEATURE_GROUPS = [
     ("Conversational analysis", "◆", [
         ("An agent squad, not a chatbot",
          "Specialists across sourcing, round modelling, diligence, IC/LP and portfolio "
-         "support. A router picks the right one — or name it with a prefix like `screen:`."),
+         "support. An intent router reads each plain-English request and selects the right specialist."),
         ("Grounded in your data",
          "Answers cite the company record, financials, cap table and indexed documents "
          "behind them, with the tool calls shown inline."),
@@ -428,7 +430,7 @@ INTEGRATION_GROUPS = [
     ("Public signal sources", "The open web, read continuously.", [
         ("LinkedIn", "Headcount by function, hiring velocity, founder and operator moves."),
         ("X / Twitter", "Investor follow-graph convergence and founder activity ahead of a round."),
-        ("Company registries", "Estonian, Latvian, Lithuanian and Polish filings, ownership and tax status."),
+        ("Company registries", "UK, French, Finnish, Estonian, Latvian and Lithuanian identity and filing data."),
         ("News & RSS", "Sector and portfolio news, deduplicated into the workspace."),
     ]),
     ("Agentic & developer surface", "FastVC as a component, not a silo.", [
@@ -438,6 +440,105 @@ INTEGRATION_GROUPS = [
         ("Bring your own LLM", "Point the squad at your own model endpoint."),
     ]),
 ]
+
+
+COMPANY_DATA_SOURCES = [
+    {
+        "name": "Pappers API", "flags": "🇫🇷", "kind": "Commercial API",
+        "logo": "https://www.pappers.fr/favicon.ico", "url": "https://www.pappers.fr/",
+        "coverage": "France, with expanding European coverage",
+        "data": "Legal identity, officers, filings and financial statements",
+    },
+    {
+        "name": "Scoris API", "flags": "🇬🇧 🇫🇮 🇪🇪 🇱🇹 🇱🇻 🇸🇪", "kind": "Commercial API",
+        "logo": "https://www.google.com/s2/favicons?domain=scoris.eu&sz=128", "url": "https://scoris.eu/",
+        "coverage": "United Kingdom, Finland, Estonia, Lithuania, Latvia and Sweden",
+        "data": "Registry search, financials, contacts and company enrichment",
+    },
+    {
+        "name": "Companies House", "flags": "🇬🇧", "kind": "Official public API",
+        "logo": "https://www.google.com/s2/favicons?domain=find-and-update.company-information.service.gov.uk&sz=128",
+        "url": "https://find-and-update.company-information.service.gov.uk/",
+        "coverage": "United Kingdom",
+        "data": "Company profiles, officers, significant control and SIC codes",
+    },
+    {
+        "name": "INSEE SIRENE", "flags": "🇫🇷", "kind": "Official open-data API",
+        "logo": "https://www.insee.fr/favicon.ico", "url": "https://portail-api.insee.fr/",
+        "coverage": "France",
+        "data": "SIREN/SIRET identity, NAF activity, status and establishments",
+    },
+    {
+        "name": "PRH / Finnish Business Information System", "flags": "🇫🇮", "kind": "Official open-data API",
+        "logo": "https://www.google.com/s2/favicons?domain=prh.fi&sz=128", "url": "https://avoindata.prh.fi/",
+        "coverage": "Finland",
+        "data": "Business IDs, industry, registered names, addresses and websites",
+    },
+    {
+        "name": "Estonian e-Business Register", "flags": "🇪🇪", "kind": "Business registry",
+        "logo": "https://ariregister.rik.ee/favicon.ico", "url": "https://ariregister.rik.ee/eng",
+        "coverage": "Estonia",
+        "data": "Registry identity and multi-period statutory financials",
+    },
+    {
+        "name": "Lithuanian company registry data", "flags": "🇱🇹", "kind": "Registry directory",
+        "logo": "https://rekvizitai.vz.lt/favicon.ico", "url": "https://rekvizitai.vz.lt/en/",
+        "coverage": "Lithuania",
+        "data": "Registration, VAT, company status, employees and annual financials",
+    },
+    {
+        "name": "Latvian Open Data Portal", "flags": "🇱🇻", "kind": "Official open data",
+        "logo": "https://data.gov.lv/favicon.ico", "url": "https://data.gov.lv/",
+        "coverage": "Latvia",
+        "data": "Enterprise-register identity and long-run annual financial history",
+    },
+]
+
+
+def DataSourcesSection():
+    """Implemented company APIs and registries, with coverage and provenance."""
+    return Section_(
+        Eyebrow("Company data sources"),
+        Heading(2, "Registry-backed company intelligence across Europe.", cls="mt-4 max-w-4xl"),
+        P("FastVC combines official APIs, licensed company-data providers and provenance-preserving "
+          "registry imports. Every record retains its source identifier, source URL, retrieval time "
+          "and applicable licence so the investment team can distinguish a filing from an inference.",
+          cls="mt-6 text-ink-muted text-lg max-w-4xl leading-relaxed mb-10"),
+        Div(
+            *[A(
+                Article(
+                    Div(
+                        Div(
+                            Img(src=source["logo"], alt=f"{source['name']} logo",
+                                cls="w-8 h-8 object-contain rounded",
+                                onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"),
+                            Span(source["name"][:3].upper(),
+                                 cls="font-mono text-[10px] text-accent", style="display:none"),
+                            cls="w-11 h-11 rounded-xl border border-line bg-bg-raised flex items-center justify-center overflow-hidden",
+                        ),
+                        Div(
+                            P(source["name"], cls="text-ink font-medium leading-snug"),
+                            P(source["kind"], cls="text-accent text-[11px] font-mono uppercase tracking-wider mt-1"),
+                        ),
+                        Span(source["flags"], cls="ml-auto text-lg tracking-wide text-right"),
+                        cls="flex items-center gap-3 mb-5",
+                    ),
+                    P(source["coverage"], cls="text-ink text-sm mb-2"),
+                    P(source["data"], cls="text-ink-muted text-sm leading-relaxed"),
+                    cls="p-6 rounded-2xl border border-line bg-bg-elevated h-full hover:border-accent/60 transition-colors",
+                ),
+                href=source["url"], target="_blank", rel="noopener noreferrer",
+                cls="block no-underline group",
+            ) for source in COMPANY_DATA_SOURCES],
+            cls="grid md:grid-cols-2 lg:grid-cols-4 gap-4",
+        ),
+        Div(
+            Pill("Source IDs retained"), Pill("Annual periods normalized"),
+            Pill("Real registry and API records"), Pill("BYOK and open-data adapters"),
+            cls="mt-8 flex flex-wrap gap-2",
+        ),
+        cls="border-t border-line",
+    )
 
 
 @rt("/features")
@@ -471,6 +572,7 @@ def features(sess):
             ),
             cls="border-t border-line",
         ) for group, icon, items in FEATURE_GROUPS],
+        DataSourcesSection(),
         IntegrationsSection(),
         CTASection(lang=lang),
         current_path="/features",
@@ -554,7 +656,7 @@ COMPARE_ROWS = [
      "Pre-round — months before announcement",
      "What a company actually does, not its SIC code"),
     ("AI agent",
-     "25-specialist squad across the whole lifecycle",
+     "Specialist squad across the whole lifecycle",
      "Scout — research, market maps, outreach drafts",
      "AI search and scoring",
      "Prompt-to-founder-contact flow",

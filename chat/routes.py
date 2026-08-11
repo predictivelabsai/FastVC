@@ -456,7 +456,7 @@ async def news_feed_html(request: Request):
         ) if a.get("summary") else None
         items.append(A(
             Div(
-                Span(_html.escape(a.get("icon") or a["source"]), cls="news-source"),
+                Span(a.get("icon") or a["source"], cls="news-source"),
                 Span(_time_ago(a.get("published", "")), cls="news-time"),
                 cls="news-item-header",
             ),

@@ -127,15 +127,33 @@ def _is_relevant(source: dict, title: str, summary: str) -> bool:
 
 
 def _fetch_one(source: dict) -> list[dict]:
-    try:
-        response = httpx.get(
-            source["url"], follow_redirects=True, timeout=8,
-            headers={"User-Agent": "FastVC/1.0 (+https://fastvc.org)"},
-        )
-        response.raise_for_status()
-        parsed = feedparser.parse(response.content)
-    except Exception as exc:
-        log.warning("RSS fetch failed for %s: %s", source["name"], exc)
+    parsed = None
+    last_error: Exception | None = None
+    user_agents = (
+        "FastVC/1.0 (+https://fastvc.org)",
+        "Mozilla/5.0 (compatible; FastVC/1.0; +https://fastvc.org)",
+    )
+    for user_agent in user_agents:
+        try:
+            response = httpx.get(
+                source["url"], follow_redirects=True, timeout=8,
+                headers={
+                    "User-Agent": user_agent,
+                    "Accept": "application/rss+xml, application/xml, "
+                              "text/xml;q=0.9, */*;q=0.5",
+                },
+            )
+            response.raise_for_status()
+            candidate = feedparser.parse(response.content)
+            if candidate.entries:
+                parsed = candidate
+                break
+            last_error = ValueError("feed returned no entries")
+        except Exception as exc:
+            last_error = exc
+
+    if parsed is None:
+        log.warning("RSS fetch failed for %s: %s", source["name"], last_error)
         return []
 
     articles = []
@@ -201,8 +219,9 @@ async def fetch_news(source_ids: list[str] | tuple[str, ...] | None = None) -> l
             if isinstance(result, Exception):
                 log.warning("RSS feed error for %s: %s", source["name"], result)
                 continue
-            _cache["source_articles"][source["id"]] = result
-            _cache["source_fetched_at"][source["id"]] = now
+            if result:
+                _cache["source_articles"][source["id"]] = result
+                _cache["source_fetched_at"][source["id"]] = now
 
     articles: list[dict] = []
     seen_urls: set[str] = set()

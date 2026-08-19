@@ -1,7 +1,6 @@
 """Entrypoint. Kept as a thin shim so standard runners (`python main.py`)
 work without changes. All routing lives in app.py."""
 
-import asyncio
 import logging
 import threading
 import time
@@ -20,13 +19,13 @@ log = logging.getLogger("scheduler")
 EET = ZoneInfo("Europe/Tallinn")
 
 
-def _prefetch_news():
-    """Warm the RSS cache before accepting requests."""
-    from utils.news import fetch_news
-    try:
-        asyncio.run(fetch_news())
-    except Exception:
-        pass
+def _news_cache_loop():
+    """Refresh every RSS source into the shared process cache every ten minutes."""
+    from utils.news import NEWS_SOURCES, _cache_ttl, refresh_news_in_background
+    source_ids = tuple(source["id"] for source in NEWS_SOURCES)
+    while True:
+        refresh_news_in_background(source_ids)
+        time.sleep(_cache_ttl())
 
 
 def _daily_deals_loop():
@@ -67,9 +66,8 @@ def _daily_deals_loop():
             log.exception("Daily deals email failed")
 
 
-_t = threading.Thread(target=_prefetch_news, daemon=True)
-_t.start()
-_t.join(timeout=8)
+_news_t = threading.Thread(target=_news_cache_loop, daemon=True, name="news-cache")
+_news_t.start()
 
 _deals_t = threading.Thread(target=_daily_deals_loop, daemon=True, name="daily-deals")
 _deals_t.start()

@@ -559,7 +559,7 @@ def right_pane(lang: str = "en"):
             ),
             Div(id="news-body", cls="news-body",
                 hx_get="/app/news/html",
-                hx_trigger="load, every 1800s",
+                hx_trigger="load, every 600s",
                 hx_swap="innerHTML",
                 hx_indicator="#news-loading"),
             cls="right-body",

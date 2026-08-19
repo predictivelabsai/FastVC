@@ -1,8 +1,9 @@
 from agents.router import route_intent
 from chat.suggestions import agent_prompt_map, welcome_suggestions
 from utils.news import (
-    DEFAULT_SOURCE_IDS, _is_relevant, _limit_with_source_coverage,
+    DEFAULT_SOURCE_IDS, _cache, _is_relevant, _limit_with_source_coverage,
     _parse_html_fallback, available_sources, normalise_source_ids,
+    cached_news,
 )
 from utils.news_preferences import _saved_selection_or_defaults
 
@@ -51,6 +52,26 @@ def test_news_limit_reserves_a_slot_for_every_selected_source():
     limited = _limit_with_source_coverage(articles, ("fast", "slow"), limit=3)
     assert len(limited) == 3
     assert {article["source_id"] for article in limited} == {"fast", "slow"}
+
+
+def test_process_cache_returns_selected_news_without_network_io():
+    original = dict(_cache["source_articles"])
+    try:
+        _cache["source_articles"] = {
+            "sifted": [{
+                "source_id": "sifted", "url": "https://example.com/cached",
+                "published": "2026-08-19T10:00:00+00:00",
+            }],
+            "tech_eu": [{
+                "source_id": "tech_eu", "url": "https://example.com/other",
+                "published": "2026-08-19T09:00:00+00:00",
+            }],
+        }
+        assert [item["url"] for item in cached_news(["sifted"])] == [
+            "https://example.com/cached",
+        ]
+    finally:
+        _cache["source_articles"] = original
 
 
 def test_official_news_page_fallback_parses_and_deduplicates_cards():

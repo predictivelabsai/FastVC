@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     digest_hour: int = Field(default=7, alias="DIGEST_HOUR")
 
     # News feed
-    news_interval_seconds: int = Field(default=1800, alias="NEWS_INTERVAL_SECONDS")
+    news_interval_seconds: int = Field(default=600, alias="NEWS_INTERVAL_SECONDS")
 
     app_env: str = Field(default="dev", alias="APP_ENV")
     app_secret: str = Field(default="change-me", alias="APP_SECRET")

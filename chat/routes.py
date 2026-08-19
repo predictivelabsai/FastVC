@@ -458,6 +458,7 @@ async def news_feed_html(request: Request):
     if not articles:
         return HTMLResponse(to_xml(Div(
             source_strip, P(t("news_empty", lang), cls="news-empty"),
+            hx_get="/app/news/html", hx_trigger="load delay:2s", hx_swap="outerHTML",
         )))
 
     items = []

@@ -98,12 +98,15 @@ def refresh_news_in_background(
     source_ids: list[str] | tuple[str, ...] | None = None,
 ) -> None:
     """Refresh stale feeds once in the background, never blocking a page request."""
+    selected_ids = normalise_source_ids(source_ids)
+    if not _stale_sources(selected_ids):
+        return
     if not _refresh_lock.acquire(blocking=False):
         return
 
     def _refresh() -> None:
         try:
-            asyncio.run(fetch_news(source_ids))
+            asyncio.run(fetch_news(selected_ids))
         except Exception as exc:
             log.warning("Background news refresh failed: %s", exc)
         finally:
@@ -126,6 +129,16 @@ def _cache_ttl() -> int:
         pass
     from utils.config import settings
     return settings().news_interval_seconds
+
+
+def _stale_sources(selected_ids: tuple[str, ...]) -> list[dict]:
+    now = datetime.now(tz=timezone.utc)
+    return [
+        _SOURCE_BY_ID[source_id]
+        for source_id in selected_ids
+        if not _cache["source_fetched_at"].get(source_id)
+        or (now - _cache["source_fetched_at"][source_id]).total_seconds() >= _cache_ttl()
+    ]
 
 
 def _parse_date(entry) -> datetime:
@@ -289,14 +302,10 @@ def _limit_with_source_coverage(
 async def fetch_news(source_ids: list[str] | tuple[str, ...] | None = None) -> list[dict]:
     """Fetch selected feeds and return a merged, deduplicated, recent list."""
     selected_ids = normalise_source_ids(source_ids)
-    now = datetime.now(tz=timezone.utc)
-    stale_sources = []
-    for source_id in selected_ids:
-        fetched_at = _cache["source_fetched_at"].get(source_id)
-        if not fetched_at or (now - fetched_at).total_seconds() >= _cache_ttl():
-            stale_sources.append(_SOURCE_BY_ID[source_id])
+    stale_sources = _stale_sources(selected_ids)
 
     if stale_sources:
+        now = datetime.now(tz=timezone.utc)
         results = await asyncio.gather(
             *[asyncio.to_thread(_fetch_one, source) for source in stale_sources],
             return_exceptions=True,
@@ -309,14 +318,7 @@ async def fetch_news(source_ids: list[str] | tuple[str, ...] | None = None) -> l
                 _cache["source_articles"][source["id"]] = result
                 _cache["source_fetched_at"][source["id"]] = now
 
-    articles: list[dict] = []
-    seen_urls: set[str] = set()
-    for source_id in selected_ids:
-        for article in _cache["source_articles"].get(source_id, []):
-            if article["url"] not in seen_urls:
-                seen_urls.add(article["url"])
-                articles.append(article)
-    return _limit_with_source_coverage(articles, selected_ids)
+    return cached_news(selected_ids)
 
 
 async def fetch_news_translated(
@@ -324,7 +326,8 @@ async def fetch_news_translated(
 ) -> list[dict]:
     """Fetch selected news and translate titles when the UI is not English."""
     selected_ids = normalise_source_ids(source_ids)
-    articles = await fetch_news(selected_ids)
+    articles = cached_news(selected_ids)
+    refresh_news_in_background(selected_ids)
     if lang == "en" or not articles:
         return articles
 

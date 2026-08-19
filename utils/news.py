@@ -64,6 +64,8 @@ _PRIVATE_MARKETS_RE = re.compile(
 
 _cache: dict = {"source_articles": {}, "source_fetched_at": {}}
 _refresh_lock = threading.Lock()
+_translation_lock = threading.Lock()
+_translations_inflight: set[str] = set()
 
 
 def available_sources() -> list[dict]:
@@ -338,27 +340,41 @@ async def fetch_news_translated(
 
     from utils.i18n import LANGUAGES
     lang_name = LANGUAGES.get(lang, {}).get("name", "English")
-    try:
-        from utils.llm import default_llm
-        llm = default_llm()
-        titles = [article["title"] for article in articles[:30]]
-        prompt = (
-            f"Translate these news headlines to {lang_name}. Return only the translations, "
-            "one per line in the same order. Keep proper nouns, company names and acronyms unchanged.\n\n"
-            + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles))
-        )
-        result = await asyncio.to_thread(llm.invoke, prompt)
-        translated_lines = [line.strip() for line in result.content.strip().split("\n") if line.strip()]
-        cleaned = [re.sub(r"^\d+\.\s*", "", line) for line in translated_lines]
-        translated = []
-        for index, article in enumerate(articles):
-            copy = dict(article)
-            if index < len(cleaned) and cleaned[index]:
-                copy["title"] = cleaned[index]
-            translated.append(copy)
-        _cache[cache_key] = translated
-        _cache[f"{cache_key}_fingerprint"] = fingerprint
-        return translated
-    except Exception as exc:
-        log.warning("Title translation failed: %s", exc)
-        return articles
+    with _translation_lock:
+        if cache_key in _translations_inflight:
+            return articles
+        _translations_inflight.add(cache_key)
+
+    def _translate() -> None:
+        try:
+            from utils.llm import default_llm
+            llm = default_llm()
+            titles = [article["title"] for article in articles[:30]]
+            prompt = (
+                f"Translate these news headlines to {lang_name}. Return only the translations, "
+                "one per line in the same order. Keep proper nouns, company names and acronyms unchanged.\n\n"
+                + "\n".join(f"{index + 1}. {title}" for index, title in enumerate(titles))
+            )
+            result = llm.invoke(prompt)
+            translated_lines = [
+                line.strip() for line in result.content.strip().split("\n") if line.strip()
+            ]
+            cleaned = [re.sub(r"^\d+\.\s*", "", line) for line in translated_lines]
+            translated = []
+            for index, article in enumerate(articles):
+                copy = dict(article)
+                if index < len(cleaned) and cleaned[index]:
+                    copy["title"] = cleaned[index]
+                translated.append(copy)
+            _cache[cache_key] = translated
+            _cache[f"{cache_key}_fingerprint"] = fingerprint
+        except Exception as exc:
+            log.warning("Title translation failed: %s", exc)
+        finally:
+            with _translation_lock:
+                _translations_inflight.discard(cache_key)
+
+    threading.Thread(
+        target=_translate, name=f"fastvc-news-translation-{lang}", daemon=True,
+    ).start()
+    return articles

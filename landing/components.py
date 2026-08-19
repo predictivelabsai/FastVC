@@ -487,13 +487,10 @@ def CaseStudyStrip(lang: str = "en"):
 
 def PENewsSection(lang: str = "en"):
     """Latest startup, venture and private-market news from curated RSS feeds."""
-    from utils.news import fetch_news
-    import asyncio
+    from utils.news import cached_news, refresh_news_in_background
 
-    try:
-        articles = asyncio.get_event_loop().run_until_complete(fetch_news())
-    except RuntimeError:
-        articles = asyncio.run(fetch_news())
+    articles = cached_news()
+    refresh_news_in_background()
 
     pe_articles = articles[:8]
 

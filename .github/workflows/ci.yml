@@ -64,6 +64,12 @@ jobs:
         run: |
           test -n "$COOLIFY_WEBHOOK_URL"
           test -n "$COOLIFY_TOKEN"
-          curl --fail --show-error --silent --retry 3 \
+          status=$(curl --show-error --silent --output /dev/null --write-out "%{http_code}" \
             "$COOLIFY_WEBHOOK_URL" \
-            -H "Authorization: Bearer $COOLIFY_TOKEN"
+            -H "Authorization: Bearer $COOLIFY_TOKEN")
+          if [ "$status" = "405" ]; then
+            status=$(curl --show-error --silent --output /dev/null --write-out "%{http_code}" \
+              --request POST "$COOLIFY_WEBHOOK_URL" \
+              -H "Authorization: Bearer $COOLIFY_TOKEN")
+          fi
+          test "$status" -ge 200 -a "$status" -lt 300

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import threading
 from datetime import datetime, timezone
 from html import unescape
 from time import mktime
@@ -62,6 +63,7 @@ _PRIVATE_MARKETS_RE = re.compile(
 )
 
 _cache: dict = {"source_articles": {}, "source_fetched_at": {}}
+_refresh_lock = threading.Lock()
 
 
 def available_sources() -> list[dict]:
@@ -77,6 +79,37 @@ def normalise_source_ids(source_ids: list[str] | tuple[str, ...] | None) -> tupl
     requested = set(source_ids or DEFAULT_SOURCE_IDS)
     selected = tuple(source["id"] for source in NEWS_SOURCES if source["id"] in requested)
     return selected or DEFAULT_SOURCE_IDS
+
+
+def cached_news(source_ids: list[str] | tuple[str, ...] | None = None) -> list[dict]:
+    """Return cached articles without performing network I/O."""
+    selected_ids = normalise_source_ids(source_ids)
+    articles: list[dict] = []
+    seen_urls: set[str] = set()
+    for source_id in selected_ids:
+        for article in _cache["source_articles"].get(source_id, []):
+            if article["url"] not in seen_urls:
+                seen_urls.add(article["url"])
+                articles.append(article)
+    return _limit_with_source_coverage(articles, selected_ids)
+
+
+def refresh_news_in_background(
+    source_ids: list[str] | tuple[str, ...] | None = None,
+) -> None:
+    """Refresh stale feeds once in the background, never blocking a page request."""
+    if not _refresh_lock.acquire(blocking=False):
+        return
+
+    def _refresh() -> None:
+        try:
+            asyncio.run(fetch_news(source_ids))
+        except Exception as exc:
+            log.warning("Background news refresh failed: %s", exc)
+        finally:
+            _refresh_lock.release()
+
+    threading.Thread(target=_refresh, name="fastvc-news-refresh", daemon=True).start()
 
 
 def _cache_ttl() -> int:

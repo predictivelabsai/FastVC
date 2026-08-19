@@ -16,7 +16,7 @@ from utils.i18n import t, agent_t, category_t, LANGUAGES
 SITE_NAME = "FastVC"
 SITE_TAGLINE = "Agentic AI for venture capital deal teams."
 CONTACT_EMAIL = os.getenv("FASTVC_CONTACT_EMAIL", "")
-GITHUB_URL = "https://github.com/predictivelabsai/fastvc"
+GITHUB_URL = "https://github.com/predictivelabsai/FastVC"
 LINKEDIN_URL = "https://www.linkedin.com/company/predictive-labs-ltd/"
 
 NAV_ITEMS = [

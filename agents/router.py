@@ -114,6 +114,14 @@ def _keyword_scores(message: str) -> dict[str, int]:
 def _best_in_category_for(message: str) -> str | None:
     """When the message looks like a category, pick a good default agent for it."""
     lower = message.lower()
+    # Full parallel-diligence run must win before the single-workstream matches
+    # (contracts/legal/tech) below, but only for phrases that clearly ask for the
+    # whole squad — "check the data room" should still hit doc_room_auditor.
+    if (("full diligence" in lower or "full due diligence" in lower
+         or "diligence run" in lower or "run diligence" in lower
+         or "complete diligence" in lower or "all workstreams" in lower
+         or "entire diligence" in lower or "whole diligence" in lower)):
+        return "super_analyst"
     if "triage" in lower or "go/no-go" in lower or "screen" in lower:
         return "deal_triage"
     if "round model" in lower or "dilution" in lower or "pre-money" in lower or "post-money" in lower:

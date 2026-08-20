@@ -152,6 +152,14 @@ AGENTS = (
       "tech: review Northwind's AI architecture risks",
       "Assess SOC 2 readiness and data boundaries",
       "Where is the product dependent on third-party models?"),
+    A("super_analyst", "Full Diligence Run", "diligence", "🔬", "diligence:",
+      "Runs the full venture-diligence squad in parallel and synthesizes a scored memo.",
+      "Fans out data-room, legal/IP, product/GTM, tech/security and commercial-contract "
+      "diligence concurrently on one target, then merges the findings into a single ranked "
+      "memo with per-workstream confidence and the open questions that most change the decision.",
+      "diligence: run full diligence on Northwind AI",
+      "Diligence Meridian Health across all five workstreams and rank the risks",
+      "What are the top three questions that would change our decision on this deal?"),
 
     A("investor_memo", "IC Memo Writer", "capital", "✎", "memo:",
       "A concise venture IC memo grounded in evidence.",

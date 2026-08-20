@@ -255,32 +255,49 @@ async def chat_stream(request: Request):
                 from agents.generalist import build as build_generalist
                 graph = build_generalist()
 
-            async for event in graph.astream_events({"messages": lc_messages}, version="v2"):
-                kind = event["event"]
-                if kind == "on_chat_model_stream":
-                    chunk = event["data"].get("chunk")
-                    if chunk and hasattr(chunk, "content") and isinstance(chunk.content, str) and chunk.content:
-                        if not getattr(chunk, "tool_call_chunks", None):
-                            accumulated.append(chunk.content)
-                            yield sse.event(sse.TOKEN, {"text": chunk.content})
-                elif kind == "on_tool_start":
-                    name = event.get("name", "unknown")
-                    args = event["data"].get("input", {})
-                    tool_calls_log.append({"name": name, "args": args})
-                    yield sse.event(sse.TOOL_START, {"name": name, "args": args})
-                elif kind == "on_tool_end":
-                    name = event.get("name", "unknown")
-                    raw = event["data"].get("output", "")
-                    output = getattr(raw, "content", None) or (raw if isinstance(raw, str) else str(raw))
-                    yield sse.event(sse.TOOL_END, {"name": name, "output": output[:2000]})
+            if agent_slug == "super_analyst":
+                # Parallel diligence: run the five specialists outside this
+                # streaming context (so their reasoning doesn't leak), stream
+                # progress as tool events, then stream the synthesized memo.
+                from agents.diligence.super_analyst import diligence_stream
+                async for kind_, data_ in diligence_stream(routed_msg):
+                    if kind_ == "start":
+                        tool_calls_log.append({"name": "diligence_squad", "args": {"workstreams": data_}})
+                        yield sse.event(sse.TOOL_START,
+                                        {"name": "diligence_squad", "args": {"workstreams": data_}})
+                    elif kind_ == "section_done":
+                        yield sse.event(sse.TOOL_END,
+                                        {"name": data_, "output": "workstream complete"})
+                    elif kind_ == "memo":
+                        accumulated.append(data_)
+                        yield sse.event(sse.TOKEN, {"text": data_})
+            else:
+                async for event in graph.astream_events({"messages": lc_messages}, version="v2"):
+                    kind = event["event"]
+                    if kind == "on_chat_model_stream":
+                        chunk = event["data"].get("chunk")
+                        if chunk and hasattr(chunk, "content") and isinstance(chunk.content, str) and chunk.content:
+                            if not getattr(chunk, "tool_call_chunks", None):
+                                accumulated.append(chunk.content)
+                                yield sse.event(sse.TOKEN, {"text": chunk.content})
+                    elif kind == "on_tool_start":
+                        name = event.get("name", "unknown")
+                        args = event["data"].get("input", {})
+                        tool_calls_log.append({"name": name, "args": args})
+                        yield sse.event(sse.TOOL_START, {"name": name, "args": args})
+                    elif kind == "on_tool_end":
+                        name = event.get("name", "unknown")
+                        raw = event["data"].get("output", "")
+                        output = getattr(raw, "content", None) or (raw if isinstance(raw, str) else str(raw))
+                        yield sse.event(sse.TOOL_END, {"name": name, "output": output[:2000]})
 
-                    # If the tool returned a structured artifact descriptor, forward it.
-                    if isinstance(output, str) and output.startswith("__ARTIFACT__"):
-                        try:
-                            payload = json.loads(output[len("__ARTIFACT__"):])
-                            yield sse.event(sse.ARTIFACT, payload)
-                        except Exception:
-                            pass
+                        # If the tool returned a structured artifact descriptor, forward it.
+                        if isinstance(output, str) and output.startswith("__ARTIFACT__"):
+                            try:
+                                payload = json.loads(output[len("__ARTIFACT__"):])
+                                yield sse.event(sse.ARTIFACT, payload)
+                            except Exception:
+                                pass
         except Exception as e:  # noqa: BLE001
             log.exception("chat stream failed")
             yield sse.event(sse.ERROR, {"message": str(e)})

@@ -64,9 +64,37 @@ def test_every_agent_builds(spec):
     ("discover: European Seed developer-tool startups", "market_scanner"),
     ("comps: Series A vertical AI rounds", "comp_finder"),
     ("outcomes: model dilution through Series C", "return_metrics"),
+    ("diligence: full diligence on Northwind AI", "super_analyst"),
 ])
 def test_prefix_routing(message, expected_slug):
     assert agent_router.route(message) == expected_slug
+
+
+@pytest.mark.parametrize("message", [
+    "run full diligence on Northwind AI",
+    "diligence run across all workstreams for Meridian Health",
+    "give me a complete diligence read on this deal",
+])
+def test_full_diligence_intent_routes_to_super_analyst(message):
+    assert agent_router.route(message) == "super_analyst"
+
+
+def test_single_workstream_does_not_trigger_the_squad():
+    # A narrow, single-workstream ask must not fan out the whole squad.
+    assert agent_router.route("vdr: audit the data room for Northwind") == "doc_room_auditor"
+    assert agent_router.route("abstract the enterprise MSAs") == "lease_abstractor"
+    assert agent_router.route("audit the data room for Northwind") != "super_analyst"
+
+
+def test_super_analyst_wiring():
+    from agents.diligence.super_analyst import WORKSTREAMS, build, diligence_stream
+    from agents.registry import by_slug
+    # Every workstream slug resolves to a real diligence specialist.
+    for label, slug in WORKSTREAMS:
+        spec = by_slug(slug)
+        assert spec is not None and spec.category == "diligence", slug
+    assert build() is not None
+    assert callable(diligence_stream)
 
 
 def test_free_form_routing_falls_back_sensibly():

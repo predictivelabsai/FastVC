@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 FastVC — agentic AI for venture capital. One FastHTML process hosting a marketing landing site, a 3-pane chat app, a pipeline kanban, an analytics (text-to-SQL → Plotly) page and in-app prompt editing. Backed by PostgreSQL (`fastvc` OLTP schema + `fastvc_rag` pgvector schema) and xAI Grok as the default LLM.
 
-25 specialist agents are wired via LangGraph `create_react_agent`, routed by prefix / keywords / LLM fallback. 11 UI languages (EN, ET, LT, LV, FI, SV, NO, DA, FR, DE, PL) via `utils/i18n.py`. Public copy avoids naming the count — the product is pitched as "Your Venture Capital AI Agent Squad".
+26 specialist agents are wired via LangGraph `create_react_agent`, routed by prefix / keywords / LLM fallback. 11 UI languages (EN, ET, LT, LV, FI, SV, NO, DA, FR, DE, PL) via `utils/i18n.py`. Public copy avoids naming the count — the product is pitched as "Your Venture Capital AI Agent Squad".
 
 ## Commands
 
@@ -36,7 +36,7 @@ pytest -q tests/test_ee_public_data.py           # EE registry/public-data helpe
 pytest -q tests/test_agents_smoke.py -k "not test_rag_retrieval"   # what CI runs
 
 # Full regression — HITS the LLM, writes docs/regression-latest.md
-python -m tests.regression_suite                 # all 25 agents, their first example_prompt
+python -m tests.regression_suite                 # all 26 agents, their first example_prompt
 python -m tests.regression_suite --slug deal_triage
 
 # Daily deals email digest (Postmark) — sends to all opted-in users
@@ -127,9 +127,9 @@ docker compose up --build                        # local bring-up
 
 ### Agents (`agents/`)
 
-- `registry.py` holds `CATEGORIES` + the `AGENTS` tuple of 25 `AgentSpec`s. Specs are built through the positional helper `A(slug, name, category, icon, prefix, one_liner, description, *prompts)` — note the helper's argument order differs from the dataclass field order (the dataclass declares `one_liner, description, prefix`). Add new agents via `A(...)`, not a raw `AgentSpec(...)`.
+- `registry.py` holds `CATEGORIES` + the `AGENTS` tuple of 26 `AgentSpec`s. Specs are built through the positional helper `A(slug, name, category, icon, prefix, one_liner, description, *prompts)` — note the helper's argument order differs from the dataclass field order (the dataclass declares `one_liner, description, prefix`). Add new agents via `A(...)`, not a raw `AgentSpec(...)`.
 - Category keys and their public display labels (`CATEGORIES` in `registry.py` is the source of truth — don't hardcode these elsewhere):
-  `sourcing` → "Discovery & Sourcing" (7) · `underwriting` → "Round & Ownership" (5) · `diligence` → "Venture Diligence" (5) · `capital` → "IC & LP Relations" (4) · `asset_mgmt` → "Portfolio Support" (4).
+  `sourcing` → "Discovery & Sourcing" (7) · `underwriting` → "Round & Ownership" (5) · `diligence` → "Venture Diligence" (6) · `capital` → "IC & LP Relations" (4) · `asset_mgmt` → "Portfolio Support" (4).
 - `router.py` resolves a user message to a slug in three steps: explicit prefix → keyword score → LLM classifier. Falls back to `deal_triage`.
 - `base.py::cached_agent(slug)` imports `agents.<category>.<slug>` and calls `build()`. Every agent module exports `SPEC`, `TOOLS`, `build()`. `build()` reads `prompts/shared/vc_context.md` + `prompts/system/<slug>.md` and wraps tools in a LangGraph ReAct agent.
 - The chat route (`chat/routes.py`) prepends a `SystemMessage` with the session's currency preference on every run, so every specialist defaults to the user's currency without a prompt rewrite.
@@ -156,7 +156,7 @@ A few tables are *not* in `schema.sql` — `db/migrate.py` creates/patches them 
 
 ### Front-end (`chat/components.py` + `static/`)
 
-- Left pane (`left_pane()` in `chat/components.py`): New-chat + session list, agent browser (5 categories × 25 agents), Workspace (Discovery / Signals / Market Map / Founders / Pipeline / Companies / Investors / Data Room / Instructions / Analytics / Valuation / Portfolio), an Integrations group with per-provider anchors (`/app/integrations#affinity|attio|pipedrive|brevo`), Training (User Guide + FastVC Game), Configuration (currency + language switcher). All routes pass `current_currency=get_currency(sess)` and `lang=get_lang(sess)` to `left_pane()`.
+- Left pane (`left_pane()` in `chat/components.py`): New-chat + session list, agent browser (5 categories × 26 agents), Workspace (Discovery / Signals / Market Map / Founders / Pipeline / Companies / Investors / Data Room / Instructions / Analytics / Valuation / Portfolio), an Integrations group with per-provider anchors (`/app/integrations#affinity|attio|pipedrive|brevo`), Training (User Guide + FastVC Game), Configuration (currency + language switcher). All routes pass `current_currency=get_currency(sess)` and `lang=get_lang(sess)` to `left_pane()`.
 - `static/app.css` holds base chat + left-pane + thinking indicator + follow-up + sample-cards + currency-chip rules. `static/pipeline.css` holds kanban + deal-detail + instructions + analytics rules (pipeline.css is only loaded on those routes; anything that also appears on `/app` must live in `app.css`).
 - `static/chat.js` handles SSE streaming, thinking-indicator (timer + rotating tool name), contextual sample cards (per agent — prompt tables embedded as `<script id="agent-prompts-data">`), the "Next step — Yes / No" follow-up pattern, Copy chat / Share link (clipboard + `POST /app/share`), memo → PDF/Word export, table → CSV/XLS export + Plotly visualize, and the currency/language selectors.
 

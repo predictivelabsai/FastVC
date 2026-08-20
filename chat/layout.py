@@ -70,6 +70,7 @@ def chat_page(*, user_email: str | None, sessions: list, current_sid: str = "",
                     selected_agent_slug=selected_agent_slug, readonly=readonly, lang=lang),
         right_pane(lang=lang),
         Script(src=_versioned("chat.js")),
+        Script(src=_versioned("voice.js")),
         prefill_script,
         cls="bg-bg text-ink font-sans antialiased app",
     )

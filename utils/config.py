@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     xai_base_url: str = Field(default="https://api.x.ai/v1", alias="XAI_BASE_URL")
     xai_model: str = Field(default="grok-4-fast-reasoning", alias="XAI_MODEL")
     xai_agent_model: str = Field(default="grok-4", alias="XAI_AGENT_MODEL")
+    # Realtime voice agent (x.ai) — the manually-created voice agent id.
+    # /ws/voice bridges browser mic audio ↔ this agent. Empty disables voice.
+    xai_voice_agent_id: str = Field(default="", alias="XAI_VOICE_AGENT_ID")
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     embedding_provider: str = Field(default="local", alias="EMBEDDING_PROVIDER")

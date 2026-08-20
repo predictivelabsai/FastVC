@@ -48,6 +48,12 @@ from chat import portfolio as _portfolio_routes  # noqa: E402,F401
 from chat import discovery as _discovery_routes  # noqa: E402,F401
 from auth import routes as _auth_routes  # noqa: E402,F401
 
+# Voice mode — /ws/voice WebSocket proxy to the x.ai realtime agent.
+# Inserted at the front of the router so the static catch-all can't shadow it.
+from voice import register_voice_routes  # noqa: E402
+
+register_voice_routes(app)
+
 
 def _serve_default():
     serve(port=settings().port)

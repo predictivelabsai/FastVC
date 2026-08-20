@@ -10,6 +10,16 @@ from fasthtml.common import (
 from agents.registry import AGENTS, AGENTS_BY_CATEGORY, CATEGORIES, AGENTS_BY_SLUG
 from utils.i18n import t, agent_t, category_t, js_translations, LANGUAGES
 from utils.version import __version__, __version_date__
+from utils.config import settings
+
+# Mic SVG for the voice button (inline so no extra asset request).
+_VOICE_ICON = (
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>'
+    '<path d="M19 10v2a7 7 0 0 1-14 0v-2"/>'
+    '<line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>'
+)
 
 
 def message_bubble(role: str, content: str, agent_slug: str | None = None):
@@ -525,6 +535,11 @@ def center_pane(*, messages: list[dict], current_agent_slug: str | None = None,
                     onkeydown="handleKey(event)",
                     oninput="autoResize(this)",
                 ),
+                *([Button(
+                    NotStr(_VOICE_ICON),
+                    id="voice-btn", type="button", onclick="toggleVoice()",
+                    cls="voice-btn", title=t("voice_title", lang),
+                )] if settings().xai_voice_agent_id else []),
                 Button(t("chat_send", lang), type="submit", cls="chat-send", id="send-btn"),
                 id="chat-form",
                 cls="chat-form",

@@ -356,9 +356,77 @@ def how_it_works(sess):
 
 # ── /pricing ─────────────────────────────────────────────────────────
 @rt("/pricing")
-def pricing():
-    """Retired in favour of /features. Kept so existing inbound links survive."""
-    return RedirectResponse("/features", status_code=301)
+def pricing(sess):
+    lang = get_lang(sess)
+    tiers = [
+        {
+            "name": "BYOC",
+            "price": "Free",
+            "sub": "Bring Your Own Cloud",
+            "blurb": "Self-host on your own infrastructure or cloud. Full control of data and upgrades. No per-seat platform fee.",
+            "features": [
+                "Self-hosted deployment",
+                "Your cloud, your VPC, your keys",
+                "Open-source code you can inspect and extend",
+                "No per-seat platform fee",
+            ],
+            "cta": ("View on GitHub", "https://github.com/predictivelabsai/FastVC"),
+            "primary": False,
+        },
+        {
+            "name": "Hosted",
+            "price": "€1 / month",
+            "sub": "Host with us",
+            "blurb": "We run the product for you on FastSME-managed infrastructure. €1 per product per month.",
+            "features": [
+                "Managed hosting and updates",
+                "€1 per product per month",
+                "Same open-source product as BYOC",
+                "Start fast without operating the stack",
+            ],
+            "cta": ("Talk to the team", "/contact"),
+            "primary": True,
+        },
+    ]
+    return page(
+        t("pricing_eyebrow", lang),
+        Section_(
+            Eyebrow(t("pricing_eyebrow", lang)),
+            Heading(1, "Simple pricing for every FastSME product.", cls="mt-4 max-w-4xl"),
+            P("BYOC free forever, or host with us for €1 per product per month.",
+              cls="mt-6 text-ink-muted text-lg max-w-3xl leading-relaxed"),
+            cls="border-t border-line",
+        ),
+        Section_(
+            Div(
+                *[Article(
+                    P(tier["name"], cls="text-[11px] font-mono tracking-widest uppercase text-ink-dim mb-3"),
+                    Div(
+                        Span(tier["price"], cls="text-4xl md:text-5xl font-medium tracking-tighter text-ink"),
+                        Span(f" {tier['sub']}", cls="text-ink-muted text-sm ml-2"),
+                        cls="mb-4",
+                    ),
+                    P(tier["blurb"], cls="text-ink-muted leading-relaxed mb-6"),
+                    Ul(
+                        *[Li(
+                            Span("✓ ", cls="text-accent mr-2"),
+                            Span(f, cls="text-ink text-sm"),
+                            cls="mb-2 flex items-baseline",
+                        ) for f in tier["features"]],
+                        cls="mb-8 space-y-1",
+                    ),
+                    Button_(tier["cta"][0], href=tier["cta"][1], primary=tier["primary"]),
+                    cls=("p-8 rounded-2xl bg-bg-elevated h-full flex flex-col " +
+                         ("border border-accent/60" if tier["primary"] else "border border-line")),
+                ) for tier in tiers],
+                cls="grid md:grid-cols-2 gap-4",
+            ),
+            cls="border-t border-line",
+        ),
+        CTASection(lang=lang),
+        current_path="/pricing",
+        lang=lang,
+    )
 
 
 # ── /features ────────────────────────────────────────────────────────

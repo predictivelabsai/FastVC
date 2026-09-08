@@ -51,25 +51,3 @@ jobs:
 
       - name: Smoke tests
         run: pytest -q tests/test_agents_smoke.py tests/test_company_ingestion.py -k "not test_rag_retrieval"
-
-  deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Coolify deployment
-        env:
-          COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-        run: |
-          test -n "$COOLIFY_WEBHOOK_URL"
-          test -n "$COOLIFY_TOKEN"
-          status=$(curl --show-error --silent --output /dev/null --write-out "%{http_code}" \
-            "$COOLIFY_WEBHOOK_URL" \
-            -H "Authorization: Bearer $COOLIFY_TOKEN")
-          if [ "$status" = "405" ]; then
-            status=$(curl --show-error --silent --output /dev/null --write-out "%{http_code}" \
-              --request POST "$COOLIFY_WEBHOOK_URL" \
-              -H "Authorization: Bearer $COOLIFY_TOKEN")
-          fi
-          test "$status" -ge 200 -a "$status" -lt 300
